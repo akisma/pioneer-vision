@@ -17,7 +17,6 @@ const ControlPanel = () => {
 
   return (
     <div className="bg-gray-800 border-b border-gray-700 p-6">
-      <h2 className="text-lg font-semibold mb-6 text-orange-400">Control Sliders</h2>
       
       <div className="flex items-center justify-center space-x-12">
         <div className="flex flex-col items-center">
