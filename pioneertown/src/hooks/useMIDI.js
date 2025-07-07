@@ -8,6 +8,7 @@ import {
   addMidiMessage,
   clearMidiMessages,
   updateSliderValue,
+  toggleButton,
   setIsLearning,
   handleCCMessage,
   resetCcCalibration,
@@ -97,8 +98,12 @@ export const useMIDI = () => {
     dispatch(updateSliderValue({ slider, value: numericValue }));
   };
 
-  const startLearning = (slider) => {
-    dispatch(setIsLearning(slider));
+  const handleButtonToggle = (button) => {
+    dispatch(toggleButton({ button }));
+  };
+
+  const startLearning = (control) => {
+    dispatch(setIsLearning(control));
   };
 
   const clearMessages = () => {
@@ -113,6 +118,7 @@ export const useMIDI = () => {
     ...midiState,
     connectToInput,
     handleSliderChange,
+    handleButtonToggle,
     startLearning,
     clearMessages,
     resetCalibration

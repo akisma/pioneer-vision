@@ -11,6 +11,10 @@ const initialState = {
     rVolume: 75,
     xFader: 30
   },
+  buttonStates: {
+    lFX: false,
+    rFX: false
+  },
   ccMappings: {},
   isLearning: null,
   // Add calibration data for each CC mapping
@@ -44,6 +48,10 @@ const midiSlice = createSlice({
       const { slider, value } = action.payload;
       state.sliderValues[slider] = value;
     },
+    toggleButton: (state, action) => {
+      const { button } = action.payload;
+      state.buttonStates[button] = !state.buttonStates[button];
+    },
     setCcMapping: (state, action) => {
       const { slider, ccNumber } = action.payload;
       state.ccMappings[slider] = ccNumber;
@@ -63,44 +71,51 @@ const midiSlice = createSlice({
       const { ccNumber, value } = action.payload;
       
       // Check if this CC is mapped to a slider and update it
-      Object.entries(state.ccMappings).forEach(([slider, cc]) => {
+      Object.entries(state.ccMappings).forEach(([control, cc]) => {
         if (cc === ccNumber) {
-          // Initialize calibration data if not exists
-          if (!state.ccCalibration[ccNumber]) {
-            state.ccCalibration[ccNumber] = {
-              min: value,
-              max: value,
-              lastValue: value
-            };
-          }
-          
-          const calibration = state.ccCalibration[ccNumber];
-          
-          // Update min/max ranges dynamically
-          if (value < calibration.min) calibration.min = value;
-          if (value > calibration.max) calibration.max = value;
-          
-          // Calculate normalized value based on actual range
-          const range = calibration.max - calibration.min;
-          let normalizedValue;
-          
-          if (range > 0) {
-            normalizedValue = Math.round(((value - calibration.min) / range) * 100);
+          // Handle buttons (assuming they're mapped with CC values)
+          if (control.endsWith('FX')) {
+            // For buttons, treat CC value > 64 as "on" (pressed)
+            state.buttonStates[control] = value > 64;
           } else {
-            // Fallback to standard 0-127 normalization
-            normalizedValue = Math.round((value / 127) * 100);
+            // Handle sliders
+            // Initialize calibration data if not exists
+            if (!state.ccCalibration[ccNumber]) {
+              state.ccCalibration[ccNumber] = {
+                min: value,
+                max: value,
+                lastValue: value
+              };
+            }
+            
+            const calibration = state.ccCalibration[ccNumber];
+            
+            // Update min/max ranges dynamically
+            if (value < calibration.min) calibration.min = value;
+            if (value > calibration.max) calibration.max = value;
+            
+            // Calculate normalized value based on actual range
+            const range = calibration.max - calibration.min;
+            let normalizedValue;
+            
+            if (range > 0) {
+              normalizedValue = Math.round(((value - calibration.min) / range) * 100);
+            } else {
+              // Fallback to standard 0-127 normalization
+              normalizedValue = Math.round((value / 127) * 100);
+            }
+            
+            // Clamp to 0-100 range
+            normalizedValue = Math.max(0, Math.min(100, normalizedValue));
+            
+            // Apply smoothing to reduce jitter (simple moving average)
+            const smoothingFactor = 0.8; // Adjust between 0-1 for more/less smoothing
+            const currentValue = state.sliderValues[control];
+            const smoothedValue = Math.round(currentValue * (1 - smoothingFactor) + normalizedValue * smoothingFactor);
+            
+            state.sliderValues[control] = smoothedValue;
+            calibration.lastValue = value;
           }
-          
-          // Clamp to 0-100 range
-          normalizedValue = Math.max(0, Math.min(100, normalizedValue));
-          
-          // Apply smoothing to reduce jitter (simple moving average)
-          const smoothingFactor = 0.8; // Adjust between 0-1 for more/less smoothing
-          const currentValue = state.sliderValues[slider];
-          const smoothedValue = Math.round(currentValue * (1 - smoothingFactor) + normalizedValue * smoothingFactor);
-          
-          state.sliderValues[slider] = smoothedValue;
-          calibration.lastValue = value;
         }
       });
       
@@ -121,6 +136,7 @@ export const {
   addMidiMessage,
   clearMidiMessages,
   updateSliderValue,
+  toggleButton,
   setCcMapping,
   setIsLearning,
   handleCCMessage,
