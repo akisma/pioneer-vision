@@ -1,35 +1,21 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { MIDIProvider } from './context/MIDIContext';
+import Header from './components/Header';
+import ControlPanel from './components/ControlPanel';
+import MIDIMonitor from './components/MIDIMonitor';
+import './styles/globals.css';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+const App = () => {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <MIDIProvider>
+      <div className="h-screen bg-gray-900 text-white font-mono flex flex-col">
+        <Header />
+        <div className="flex-1 flex flex-col min-h-0">
+          <ControlPanel />
+          <MIDIMonitor />
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    </MIDIProvider>
+  );
+};
 
-export default App
+export default App;
