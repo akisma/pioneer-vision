@@ -31,7 +31,7 @@ const HorizontalSlider = ({ label, value, onChange, ccMapping, isLearning, onLea
           className="absolute w-full h-8 appearance-none bg-transparent cursor-pointer"
         />
         <div 
-          className="absolute top-0 left-0 h-full bg-orange-500 rounded-lg transition-all duration-150"
+          className="absolute top-0 left-0 h-full bg-orange-500 rounded-lg pointer-events-none"
           style={{ width: `${value}%` }}
         ></div>
       </div>

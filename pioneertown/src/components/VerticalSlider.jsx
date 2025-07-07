@@ -28,11 +28,20 @@ const VerticalSlider = ({ label, value, onChange, ccMapping, isLearning, onLearn
           max="100"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="absolute h-full w-8 appearance-none bg-transparent cursor-pointer slider-vertical"
-          style={{ writingMode: 'bt-lr' }}
+          className="absolute h-full w-8 appearance-none bg-transparent cursor-pointer"
+          style={{
+            transform: 'rotate(-90deg)',
+            transformOrigin: 'center',
+            width: '192px', // height of container (48 * 4 = 192px)
+            height: '32px', // width of container (8 * 4 = 32px)
+            left: '50%',
+            top: '50%',
+            marginLeft: '-96px', // -width/2
+            marginTop: '-16px', // -height/2
+          }}
         />
         <div 
-          className="absolute bottom-0 left-0 w-full bg-orange-500 rounded-lg transition-all duration-150"
+          className="absolute bottom-0 left-0 w-full bg-orange-500 rounded-lg pointer-events-none"
           style={{ height: `${value}%` }}
         ></div>
       </div>

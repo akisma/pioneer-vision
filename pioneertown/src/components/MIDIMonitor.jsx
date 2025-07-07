@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Activity } from 'lucide-react';
-import { useMIDI } from '../context/MIDIContext';
+import { useMIDI } from '../hooks/useMIDI';
 import MIDIMessage from './MIDIMessage';
 
 const MIDIMonitor = () => {

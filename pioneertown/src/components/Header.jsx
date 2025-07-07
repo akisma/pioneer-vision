@@ -1,5 +1,5 @@
 import React from 'react';
-import { useMIDI } from '../context/MIDIContext';
+import { useMIDI } from '../hooks/useMIDI';
 
 const Header = () => {
   const { midiInputs, selectedInput, isConnected, connectToInput, clearMessages } = useMIDI();
