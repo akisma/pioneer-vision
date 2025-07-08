@@ -73,7 +73,8 @@ export const useMIDI = () => {
       const isControlChange = (status & 0xF0) === 0xB0;
       
       if (isControlChange) {
-        dispatch(handleCCMessage({ ccNumber: data1, value: data2 }));
+        const channel = (status & 0x0F) + 1; // Extract channel (0-15 becomes 1-16)
+        dispatch(handleCCMessage({ ccNumber: data1, value: data2, channel }));
       }
     };
   };

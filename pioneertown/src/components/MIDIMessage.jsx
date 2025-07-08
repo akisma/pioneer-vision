@@ -22,7 +22,7 @@ const MIDIMessage = ({ message }) => {
       </div>
       {message.type === 'Control Change' && (
         <div className="mt-2 text-sm text-gray-400">
-          CC{message.data1}: {message.data2} ({Math.round((message.data2 / 127) * 100)}%)
+          Ch{((message.status & 0x0F) + 1)} CC{message.data1}: {message.data2} ({Math.round((message.data2 / 127) * 100)}%)
         </div>
       )}
     </div>

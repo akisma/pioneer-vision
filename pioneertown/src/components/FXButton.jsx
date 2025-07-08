@@ -7,7 +7,7 @@ const FXButton = ({ label, isOn, onToggle, ccMapping, isLearning, onLearn }) => 
         <label className="text-xs font-medium text-gray-300">{label}</label>
         <div className="flex items-center space-x-2 ml-4">
           <span className="text-xs text-gray-400">
-            {ccMapping ? `CC${ccMapping}` : 'Unmapped'}
+            {ccMapping ? `Ch${ccMapping.channel} CC${ccMapping.cc}` : 'Unmapped'}
           </span>
           <button
             onClick={onLearn}

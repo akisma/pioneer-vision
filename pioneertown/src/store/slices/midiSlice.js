@@ -15,9 +15,9 @@ const initialState = {
     lFX: false,
     rFX: false
   },
-  ccMappings: {},
+  ccMappings: {}, // Will store { controlName: { channel: 1, cc: 7 } }
   isLearning: null,
-  // Add calibration data for each CC mapping
+  // Add calibration data for each CC mapping (keyed by "channel:cc")
   ccCalibration: {},
 };
 
@@ -53,8 +53,8 @@ const midiSlice = createSlice({
       state.buttonStates[button] = !state.buttonStates[button];
     },
     setCcMapping: (state, action) => {
-      const { slider, ccNumber } = action.payload;
-      state.ccMappings[slider] = ccNumber;
+      const { control, channel, ccNumber } = action.payload;
+      state.ccMappings[control] = { channel, cc: ccNumber };
     },
     setIsLearning: (state, action) => {
       state.isLearning = action.payload;
@@ -68,27 +68,29 @@ const midiSlice = createSlice({
       }
     },
     handleCCMessage: (state, action) => {
-      const { ccNumber, value } = action.payload;
+      const { ccNumber, value, channel } = action.payload;
       
-      // Check if this CC is mapped to a slider and update it
-      Object.entries(state.ccMappings).forEach(([control, cc]) => {
-        if (cc === ccNumber) {
+      // Check if this CC+channel combination is mapped to any control
+      Object.entries(state.ccMappings).forEach(([control, mapping]) => {
+        if (mapping.cc === ccNumber && mapping.channel === channel) {
           // Handle buttons (assuming they're mapped with CC values)
           if (control.endsWith('FX')) {
             // For buttons, treat CC value > 64 as "on" (pressed)
             state.buttonStates[control] = value > 64;
           } else {
             // Handle sliders
+            const calibrationKey = `${channel}:${ccNumber}`;
+            
             // Initialize calibration data if not exists
-            if (!state.ccCalibration[ccNumber]) {
-              state.ccCalibration[ccNumber] = {
+            if (!state.ccCalibration[calibrationKey]) {
+              state.ccCalibration[calibrationKey] = {
                 min: value,
                 max: value,
                 lastValue: value
               };
             }
             
-            const calibration = state.ccCalibration[ccNumber];
+            const calibration = state.ccCalibration[calibrationKey];
             
             // Update min/max ranges dynamically
             if (value < calibration.min) calibration.min = value;
@@ -119,9 +121,9 @@ const midiSlice = createSlice({
         }
       });
       
-      // If learning mode is active, map the CC to the learning slider
+      // If learning mode is active, map the CC+channel to the learning control
       if (state.isLearning) {
-        state.ccMappings[state.isLearning] = ccNumber;
+        state.ccMappings[state.isLearning] = { channel, cc: ccNumber };
         state.isLearning = null;
       }
     },
