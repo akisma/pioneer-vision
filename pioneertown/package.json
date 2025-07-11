@@ -1,13 +1,27 @@
 {
   "name": "pioneertown",
+  "description": "A modern, web-based MIDI controller interface with real-time control and crash-resistant architecture",
+  "version": "0.2.0",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
+  "keywords": [
+    "midi",
+    "controller",
+    "web-midi",
+    "react",
+    "redux",
+    "music",
+    "dj",
+    "audio"
+  ],
+  "author": "PioneerTown Development Team",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "npm run dev"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.2",
