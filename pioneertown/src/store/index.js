@@ -8,9 +8,11 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Ignore MIDI access objects and input objects as they're not serializable
+        // Ignore MIDI objects as they contain non-serializable data
         ignoredActions: ['midi/setMidiAccess', 'midi/setSelectedInput'],
         ignoredPaths: ['midi.midiAccess', 'midi.selectedInput', 'midi.midiInputs'],
       },
     }),
 });
+
+export default store;

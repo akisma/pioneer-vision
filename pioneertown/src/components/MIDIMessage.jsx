@@ -1,6 +1,6 @@
 import React from 'react';
 
-const MIDIMessage = ({ message }) => {
+const MIDIMessage = React.memo(({ message }) => {
   return (
     <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-orange-400 transition-colors">
       <div className="flex items-center justify-between">
@@ -22,11 +22,18 @@ const MIDIMessage = ({ message }) => {
       </div>
       {message.type === 'Control Change' && (
         <div className="mt-2 text-sm text-gray-400">
-          Ch{((message.status & 0x0F) + 1)} CC{message.data1}: {message.data2} ({Math.round((message.data2 / 127) * 100)}%)
+          CC{message.data1}: {message.data2} ({Math.round((message.data2 / 127) * 100)}%)
+        </div>
+      )}
+      {(message.type === 'Note On' || message.type === 'Note Off') && (
+        <div className="mt-2 text-sm text-gray-400">
+          Note{message.data1}: {message.data2} velocity
         </div>
       )}
     </div>
   );
-};
+});
+
+MIDIMessage.displayName = 'MIDIMessage';
 
 export default MIDIMessage;

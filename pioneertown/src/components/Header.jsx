@@ -1,8 +1,23 @@
 import React from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { clearMidiMessages } from '../store/slices/midiSlice';
 import { useMIDI } from '../hooks/useMIDI';
 
 const Header = () => {
-  const { midiInputs, selectedInput, isConnected, connectToInput, clearMessages } = useMIDI();
+  const dispatch = useDispatch();
+  const { midiInputs, selectedInput, isConnected } = useSelector(state => state.midi);
+  const { connectToInput } = useMIDI();
+
+  const handleInputChange = (inputId) => {
+    const input = midiInputs.find(i => i.id === inputId);
+    if (input) {
+      connectToInput(input);
+    }
+  };
+
+  const handleClearMessages = () => {
+    dispatch(clearMidiMessages());
+  };
 
   return (
     <div className="bg-gray-800 border-b border-gray-700 p-4">
@@ -20,10 +35,7 @@ const Header = () => {
         <div className="flex items-center space-x-4">
           <select 
             className="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm"
-            onChange={(e) => {
-              const input = midiInputs.find(i => i.id === e.target.value);
-              if (input) connectToInput(input);
-            }}
+            onChange={(e) => handleInputChange(e.target.value)}
             value={selectedInput?.id || ''}
           >
             <option value="">Select MIDI Input</option>
@@ -35,7 +47,7 @@ const Header = () => {
           </select>
           
           <button 
-            onClick={clearMessages}
+            onClick={handleClearMessages}
             className="bg-orange-500 hover:bg-orange-600 px-3 py-1 rounded text-sm transition-colors"
           >
             Clear Log
