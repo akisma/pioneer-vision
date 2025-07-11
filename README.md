@@ -1,6 +1,6 @@
-# 🎛️ PioneerTown - MIDI Controller Interface
+# 🎛️ PioneerTown - MIDI-based Status Monitoring for Pioneer DJM-series Controllers
 
-A modern, web-based MIDI controller interface built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI control with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
+A modern, web-based MIDI aggregation dashboard built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI observation with a responsive, crash-resistant architecture optimized for high-frequency MIDI data, including HRCC.
 
 ![MIDI Controller Interface](https://img.shields.io/badge/MIDI-Controller-orange) ![React](https://img.shields.io/badge/React-19.1.0-blue) ![Redux](https://img.shields.io/badge/Redux-Toolkit-purple) ![Vite](https://img.shields.io/badge/Vite-7.0.2-green)
 
@@ -16,19 +16,11 @@ A modern, web-based MIDI controller interface built with React, Redux, and the W
 ### 📊 **MIDI Monitor**
 - **Real-time Message Display**: Live MIDI message logging with timestamps
 - **Message Types**: Support for CC, HRCC, Note On/Off, Pitch Bend, and more
-- **Performance Optimized**: Limited display (20 messages) for smooth operation
-- **Auto-scroll**: Automatic scrolling to latest messages
-
-### 🛡️ **Crash Prevention**
-- **Performance Monitoring**: Real-time FPS and message rate tracking
-- **Adaptive Throttling**: Automatic performance adjustment under load
-- **Error Boundaries**: Graceful error recovery with state reset
-- **Memory Management**: Efficient message queuing and cleanup
 
 ### 🎨 **Modern UI**
 - **Responsive Design**: Clean, modern interface built with Tailwind CSS
 - **Real-time Updates**: Instant visual feedback for all controls
-- **Dark Theme**: Professional dark interface with orange accents
+- **Dark Theme**: Professional dark interface with orange accents, ideal for live situations
 - **Touch Friendly**: Optimized for both mouse and touch interactions
 
 ## 🚀 Quick Start
