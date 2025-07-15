@@ -32,8 +32,9 @@ const FXButton = ({ label, isPressed, onPress, onRelease, mapping, isLearning, o
                 ? 'bg-orange-500 text-white' 
                 : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
             }`}
+            title={isLearning ? 'Learning... (Press Esc to cancel)' : 'Learn MIDI mapping'}
           >
-            {isLearning ? 'Learning...' : 'Learn'}
+            {isLearning ? 'Learning... (ESC)' : 'Learn'}
           </button>
           <button
             onClick={handleManualMapping}

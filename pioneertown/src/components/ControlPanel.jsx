@@ -1,12 +1,16 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { updateSliderValue, updateButtonState, startLearning, updateMappingValue } from '../store/slices/midiSlice';
+import { useEscapeToCancel } from '../hooks/useEscapeToCancel';
 import VerticalSlider from './VerticalSlider';
 import HorizontalSlider from './HorizontalSlider';
 import FXButton from './FXButton';
 
 const ControlPanel = () => {
   const dispatch = useDispatch();
+  
+  // Initialize escape key cancellation
+  useEscapeToCancel();
   
   // Add defensive selector with fallback values
   const midiState = useSelector(state => state?.midi || {});
