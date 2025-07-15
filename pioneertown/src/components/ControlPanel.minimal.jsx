@@ -2,7 +2,7 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 const ControlPanel = () => {
-  const { sliders, buttons, learningState, mappings } = useSelector(state => state.midi);
+  const { sliders, buttons } = useSelector(state => state.midi);
 
   return (
     <div className="bg-gray-800 border-b border-gray-700 p-4 flex-shrink-0">

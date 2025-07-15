@@ -1,23 +1,7 @@
 import React from 'react';
+import MappingDisplay from './MappingDisplay';
 
 const FXButton = ({ label, isPressed, onPress, onRelease, mapping, isLearning, onLearn, onMappingChange }) => {
-  const getMappingText = () => {
-    if (!mapping) return 'Unmapped';
-    
-    const { messageType, channel, ccNumber } = mapping;
-    const channelText = channel ? `Ch${channel}` : '';
-    
-    switch (messageType) {
-      case 'cc':
-        return `CC${ccNumber} ${channelText}`.trim();
-      case 'hrcc':
-        return `HRCC${ccNumber} ${channelText}`.trim();
-      case 'note':
-        return `Note${ccNumber} ${channelText}`.trim();
-      default:
-        return 'Unknown';
-    }
-  };
   
   const handleManualMapping = () => {
     const messageType = prompt('Enter message type (cc, hrcc, note):', 'note');
@@ -40,9 +24,7 @@ const FXButton = ({ label, isPressed, onPress, onRelease, mapping, isLearning, o
       <div className="flex items-center justify-between w-full">
         <label className="text-sm font-medium text-gray-300">{label}</label>
         <div className="flex items-center space-x-2 ml-4">
-          <span className="text-xs text-gray-400" title="Current mapping">
-            {getMappingText()}
-          </span>
+          <MappingDisplay mapping={mapping} />
           <button
             onClick={onLearn}
             className={`px-2 py-1 text-xs rounded ${
