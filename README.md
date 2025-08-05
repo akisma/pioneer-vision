@@ -101,8 +101,7 @@ src/
 │   ├── VerticalSlider.jsx # Slider controls
 │   ├── HorizontalSlider.jsx
 │   ├── FXButton.jsx      # Button controls
-│   ├── Header.jsx        # App header
-│   └── ErrorBoundary.jsx # Error handling
+│   └── Header.jsx        # App header
 ├── hooks/               # Custom React hooks
 │   └── useMIDI.js       # MIDI connection & handling
 ├── store/               # Redux store
