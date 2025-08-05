@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import midiReducer from './slices/midiSlice';
+import createMidiThrottleMiddleware from './middleware/midiThrottle';
 
 export const store = configureStore({
   reducer: {
@@ -12,7 +13,7 @@ export const store = configureStore({
         ignoredActions: ['midi/setMidiAccess', 'midi/setSelectedInput'],
         ignoredPaths: ['midi.midiAccess', 'midi.selectedInput', 'midi.midiInputs'],
       },
-    }),
+    }).concat(createMidiThrottleMiddleware()),
 });
 
 export default store;

@@ -434,6 +434,116 @@ const midiSlice = createSlice({
         delete state.mappings[controlType][controlId];
       }
     },
+
+    // Batched MIDI Controls Update (for throttling middleware)
+    updateMIDIControlsBatch: (state, action) => {
+      try {
+        const messages = action.payload; // Array of latest messages per channel+CC
+        
+        if (!Array.isArray(messages)) {
+          console.warn('updateMIDIControlsBatch: payload must be an array');
+          return;
+        }
+        
+        messages.forEach(message => {
+          const { channel, cc, value, messageType } = message;
+          
+          // Validate message data
+          if (!Number.isInteger(channel) || !Number.isInteger(cc) || !Number.isInteger(value)) {
+            console.warn('Invalid message data in batch:', message);
+            return;
+          }
+          
+          // Update control states (sliders/buttons) for CC/HRCC messages
+          if (messageType === 'controlchange' || messageType === 'hrcc') {
+            // Find mapped control for this channel+CC combination
+            const mappingKey = `ch${channel}-cc${cc}`;
+            
+            // Check new mappings structure first
+            if (state.mappings?.slider) {
+              for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {
+                if (mapping?.messageType === messageType && 
+                    mapping?.ccNumber === cc && 
+                    (!mapping.channel || mapping.channel === channel)) {
+                  
+                  if (!state.sliders[sliderId]) {
+                    state.sliders[sliderId] = { value: 0 };
+                  }
+                  
+                  // Convert MIDI value (0-127) to percentage (0-100)
+                  const normalizedValue = Math.max(0, Math.min(100, Math.round((value / 127) * 100)));
+                  state.sliders[sliderId].value = normalizedValue;
+                  state.sliders[sliderId].lastUpdated = message.timestamp || Date.now();
+                  break; // Exit after first match
+                }
+              }
+            }
+            
+            // Check button mappings
+            if (state.mappings?.button) {
+              for (const [buttonId, mapping] of Object.entries(state.mappings.button)) {
+                if (mapping?.messageType === messageType && 
+                    mapping?.ccNumber === cc && 
+                    (!mapping.channel || mapping.channel === channel)) {
+                  
+                  if (!state.buttons[buttonId]) {
+                    state.buttons[buttonId] = { isPressed: false };
+                  }
+                  
+                  // Convert MIDI value to button state (>= 64 = pressed)
+                  state.buttons[buttonId].isPressed = value >= 64;
+                  state.buttons[buttonId].value = value;
+                  state.buttons[buttonId].lastUpdated = message.timestamp || Date.now();
+                  break; // Exit after first match
+                }
+              }
+            }
+            
+            // Add to monitor display (with limit)
+            state.midiMessages.unshift({
+              ...message,
+              id: `${message.channel}-${message.cc}-${message.timestamp || Date.now()}`,
+              timestamp: message.timestamp || Date.now()
+            });
+          }
+        });
+        
+        // Trim monitor messages to limit
+        if (state.midiMessages.length > 25) {
+          state.midiMessages = state.midiMessages.slice(0, 25);
+        }
+        
+      } catch (error) {
+        console.error('Error in updateMIDIControlsBatch:', error);
+        // Don't reset state on error to prevent data loss
+      }
+    },
+
+    // MIDI Message Received (for throttling middleware)
+    messageReceived: (state, action) => {
+      // This action is intercepted by middleware for CC/HRCC messages
+      // Other message types (Note On/Off) are processed here immediately
+      const { messageType } = action.payload;
+      
+      if (messageType === 'noteon' || messageType === 'noteoff') {
+        // Handle Note messages immediately (no throttling)
+        // Implementation similar to handleNoteMessage if needed
+      }
+      
+      // Add all messages to monitor (throttled messages will be added by batch update)
+      if (messageType !== 'controlchange' && messageType !== 'hrcc') {
+        state.midiMessages.unshift({
+          ...action.payload,
+          id: `${action.payload.channel}-${action.payload.cc || action.payload.note}-${Date.now()}`,
+          timestamp: Date.now()
+        });
+        
+        // Trim monitor messages
+        if (state.midiMessages.length > 25) {
+          state.midiMessages = state.midiMessages.slice(0, 25);
+        }
+      }
+    },
   },
 });
 
@@ -461,6 +571,8 @@ export const {
   stopLearning,
   updateMappingValue,
   clearMapping,
+  updateMIDIControlsBatch,
+  messageReceived,
 } = midiSlice.actions;
 
 export default midiSlice.reducer;
