@@ -158,8 +158,8 @@ export const useMIDI = () => {
   }, [onMIDISuccess]);
 
   const handleSliderChange = (slider, value) => {
-    // Ensure value is a number
-    const numericValue = parseInt(value, 10);
+    // Ensure value is a number and within MIDI range (0-127)
+    const numericValue = Math.max(0, Math.min(127, parseInt(value, 10)));
     dispatch(updateSliderValue({ slider, value: numericValue }));
   };
 

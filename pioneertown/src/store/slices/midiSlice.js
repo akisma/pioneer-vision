@@ -209,7 +209,8 @@ const midiSlice = createSlice({
               if (!state.sliders[sliderId]) {
                 state.sliders[sliderId] = { value: 0 };
               }
-              state.sliders[sliderId].value = Math.max(0, Math.min(100, Math.round((calibratedValue / 127) * 100)));
+              // Convert MIDI value (0-127) to percentage (0-100) with proper precision
+              state.sliders[sliderId].value = Math.round((calibratedValue / 127) * 100);
               break; // Exit after first match for performance
             }
           }
@@ -223,9 +224,9 @@ const midiSlice = createSlice({
               if (state.sliderValues && typeof state.sliderValues === 'object' && controlKey in state.sliderValues) {
                 state.sliderValues[controlKey] = calibratedValue;
               }
-              // Update new sliders structure
+              // Update new sliders structure with proper MIDI to percentage conversion
               if (state.sliders?.[controlKey]) {
-                state.sliders[controlKey].value = Math.max(0, Math.min(100, Math.round((calibratedValue / 127) * 100)));
+                state.sliders[controlKey].value = Math.round((calibratedValue / 127) * 100);
               }
               break; // Exit after first match for performance
             }
@@ -413,7 +414,10 @@ const midiSlice = createSlice({
       if (!state.sliders[id]) {
         state.sliders[id] = { value: 0 };
       }
-      state.sliders[id].value = value;
+      // If value is already in percentage (0-100), use as-is
+      // If value is in MIDI range (0-127), convert to percentage
+      const finalValue = value > 100 ? Math.round((value / 127) * 100) : value;
+      state.sliders[id].value = Math.max(0, Math.min(100, finalValue));
     },
 
     updateButtonState: (state, action) => {
@@ -475,9 +479,6 @@ const midiSlice = createSlice({
           
           // Update control states (sliders/buttons) for CC/HRCC messages
           if (messageType === 'controlchange' || messageType === 'hrcc') {
-            // Find mapped control for this channel+CC combination
-            const mappingKey = `ch${channel}-cc${cc}`;
-            
             // Check new mappings structure first
             if (state.mappings?.slider) {
               for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {
@@ -489,8 +490,8 @@ const midiSlice = createSlice({
                     state.sliders[sliderId] = { value: 0 };
                   }
                   
-                  // Convert MIDI value (0-127) to percentage (0-100)
-                  const normalizedValue = Math.max(0, Math.min(100, Math.round((value / 127) * 100)));
+                  // Convert MIDI value (0-127) to percentage (0-100) with proper precision
+                  const normalizedValue = Math.round((value / 127) * 100);
                   state.sliders[sliderId].value = normalizedValue;
                   state.sliders[sliderId].lastUpdated = message.timestamp || Date.now();
                   break; // Exit after first match
