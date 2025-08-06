@@ -9,12 +9,14 @@ const initialState = {
   
   // MIDI Messages
   midiMessages: [],
+  latestMessages: {}, // Store latest message per channel/type/key
+  recentActivity: [], // Store recent 20 messages for display
   
   // Control State
   sliders: {
-    lVolume: { value: 64 },
-    xFader: { value: 64 },
-    rVolume: { value: 64 },
+    leftVolume: 0,
+    rightVolume: 0,
+    crossfader: 0,
   },
   
   buttons: {
@@ -84,28 +86,45 @@ const midiSlice = createSlice({
     
     // MIDI Message Actions
     addMidiMessage: (state, action) => {
-      try {
-        // Validate payload
-        if (!action.payload || typeof action.payload !== 'object') {
-          return;
-        }
-        
-        // Push new message
-        state.midiMessages.push(action.payload);
-        
-        // Keep only the latest 25 messages (reduced further for crash prevention)
-        if (state.midiMessages.length > 25) {
-          state.midiMessages = state.midiMessages.slice(-25);
-        }
-      } catch (error) {
-        console.error('Error adding MIDI message:', error);
-        // Reset messages array on error to prevent further crashes
-        state.midiMessages = [];
+      const message = action.payload;
+      
+      // Create unique message with timestamp if not present
+      const messageWithId = {
+        ...message,
+        id: message.id || `${Date.now()}-${Math.random()}`,
+        timestamp: message.timestamp || performance.now()
+      };
+      
+      state.midiMessages.push(messageWithId);
+      
+      // Keep only the last 50 messages to prevent memory issues
+      if (state.midiMessages.length > 50) {
+        state.midiMessages = state.midiMessages.slice(-50);
       }
     },
     
+    updateMIDIMessage: (state, action) => {
+      const messages = Array.isArray(action.payload) ? action.payload : [action.payload];
+      
+      messages.forEach(message => {
+        if (!message?.key) return;
+        
+        // Update latest message for this key
+        state.latestMessages[message.key] = message;
+        
+        // Add to recent activity (for display)
+        state.recentActivity.unshift(message);
+        
+        // Keep only last 20 for display
+        if (state.recentActivity.length > 20) {
+          state.recentActivity = state.recentActivity.slice(0, 20);
+        }
+      });
+    },
     clearMidiMessages: (state) => {
       state.midiMessages = [];
+      state.latestMessages = {};
+      state.recentActivity = [];
     },
     
     toggleButton: (state, action) => {
@@ -553,6 +572,7 @@ export const {
   setSelectedInput,
   setIsConnected,
   addMidiMessage,
+  updateMIDIMessage,
   clearMidiMessages,
   updateSliderValue,
   toggleButton,

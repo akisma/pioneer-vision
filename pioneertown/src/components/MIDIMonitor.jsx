@@ -1,44 +1,27 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React from 'react';
 import { Activity } from 'lucide-react';
-import { useSelector } from 'react-redux';
-import MIDIMessage from './MIDIMessage';
+import { useSelector, useDispatch } from 'react-redux';
+import { clearMidiMessages } from '../store/slices/midiSlice';
 
-const MIDIMonitor = React.memo(() => {
-  const midiState = useSelector(state => state?.midi || {});
-  const { midiMessages = [] } = midiState;
-  const messagesEndRef = useRef(null);
-  const scrollTimeoutRef = useRef(null);
+const MIDIMonitor = () => {
+  const dispatch = useDispatch();
+  const latestMessages = useSelector(state => state.midi?.latestMessages || {});
+  const recentActivity = useSelector(state => state.midi?.recentActivity || []);
+  const isConnected = useSelector(state => state.midi?.isConnected || false);
 
-  // Memoize the last few messages to reduce render load
-  const displayMessages = useMemo(() => {
-    // Only show the last 20 messages to prevent UI lag
-    const maxDisplayMessages = 20;
-    return midiMessages.slice(-maxDisplayMessages);
-  }, [midiMessages]);
+  const handleClearMessages = () => {
+    dispatch(clearMidiMessages());
+  };
 
-  // Throttled scroll to bottom
-  useEffect(() => {
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    
-    scrollTimeoutRef.current = setTimeout(() => {
-      try {
-        messagesEndRef.current?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'end' 
-        });
-      } catch (error) {
-        console.warn('Scroll error:', error);
-      }
-    }, 100); // Debounce scroll updates
-    
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, [displayMessages]);
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const seconds = Math.floor(timestamp / 1000) % 60;
+    const minutes = Math.floor(timestamp / 60000) % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Convert latest messages to array for display
+  const latestMessagesArray = Object.values(latestMessages);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -48,32 +31,84 @@ const MIDIMonitor = React.memo(() => {
             <Activity className="mr-2" size={20} />
             MIDI Monitor
           </h2>
-          <div className="text-sm text-gray-400">
-            {midiMessages.length} messages {displayMessages.length < midiMessages.length && `(showing last ${displayMessages.length})`}
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-400">
+              {latestMessagesArray.length} active controls, {recentActivity.length} recent
+            </div>
+            <button 
+              onClick={handleClearMessages}
+              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+            >
+              Clear
+            </button>
           </div>
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-900 min-h-0">
-        <div className="space-y-2">
-          {displayMessages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto bg-gray-900 min-h-0">
+        {/* Current Control States */}
+        <div className="p-4 border-b border-gray-700">
+          <h3 className="text-orange-400 font-medium mb-3">Current Control States</h3>
+          {latestMessagesArray.length === 0 ? (
+            <div className="text-center text-gray-500 py-4">
+              <p>No active controls</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {latestMessagesArray.map((message) => (
+                <div key={message.key} className="bg-blue-900/30 border border-blue-700/50 rounded p-3 text-sm">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-blue-300 font-medium">{message.type}</span>
+                    <span className="text-xs text-gray-400">Ch{message.channel}</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <span className="text-blue-400 font-bold">
+                      {message.type === 'Control Change' ? `CC${message.data1}` : 
+                       message.type === 'Note On' || message.type === 'Note Off' ? `Note${message.data1}` :
+                       `${message.data1}`}
+                    </span>
+                    <span className="text-green-400 font-bold text-lg">{message.data2}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {formatTimestamp(message.timestamp)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Activity */}
+        <div className="p-4">
+          <h3 className="text-orange-400 font-medium mb-3">Recent Activity</h3>
+          {recentActivity.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
               <Activity size={48} className="mx-auto mb-4 opacity-50" />
               <p>No MIDI messages received</p>
               <p className="text-sm">Connect a MIDI device and start playing</p>
             </div>
           ) : (
-            displayMessages.map((message) => (
-              <MIDIMessage key={message.id} message={message} />
-            ))
+            <div className="space-y-1">
+              {recentActivity.slice(0, 20).map((message, index) => (
+                <div key={`${message.id}-${index}`} className="bg-gray-800/50 rounded px-3 py-2 text-sm flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 w-12">
+                      {formatTimestamp(message.timestamp)}
+                    </span>
+                    <span className="text-gray-300">{message.type}</span>
+                    <span className="text-blue-400">Ch{message.channel}</span>
+                  </div>
+                  <div className="text-gray-400 font-mono text-xs">
+                    {(message.status || 0).toString(16).toUpperCase()} {message.data1 || 0} {message.data2 || 0}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
       </div>
     </div>
   );
-});
-
-MIDIMonitor.displayName = 'MIDIMonitor';
+};
 
 export default MIDIMonitor;

@@ -1,14 +1,16 @@
+import React from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store';
-import { useMIDI } from './hooks/useMIDI';
+import { useMIDI } from './hooks/useMIDI-simple';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import MIDIMonitor from './components/MIDIMonitor';
 import './styles/globals.css';
 
+// Component that uses the MIDI hook - must be inside Provider
 const MIDIApp = () => {
-  useMIDI(); // Initialize MIDI connection
-  
+  useMIDI(); // This hook must be called inside a React component
+
   return (
     <div className="h-screen bg-gray-900 text-white font-mono flex flex-col">
       <Header />
@@ -20,12 +22,13 @@ const MIDIApp = () => {
   );
 };
 
-const App = () => {
+// Main App component that provides Redux store
+function App() {
   return (
     <Provider store={store}>
       <MIDIApp />
     </Provider>
   );
-};
+}
 
 export default App;

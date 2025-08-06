@@ -1,5 +1,6 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useCallback, useRef } from 'react';
+import { throttle } from 'lodash';
 import { performanceMonitor } from '../utils/PerformanceMonitor';
 import {
   setMidiAccess,
@@ -7,6 +8,7 @@ import {
   setSelectedInput,
   setIsConnected,
   addMidiMessage,
+  updateMIDIMessage,
   clearMidiMessages,
   updateSliderValue,
   toggleButton,
@@ -21,9 +23,23 @@ export const useMIDI = () => {
   const dispatch = useDispatch();
   const midiState = useSelector((state) => state?.midi || {});
   
-  // Simplified throttling for monitor display only
-  const lastMessageTime = useRef(0);
-  const MESSAGE_THROTTLE = 200; // Throttle message logging to 5fps
+  // Track latest message per channel/type/key combination
+  const latestMessages = useRef(new Map());
+  
+  // Create throttled dispatch function - updates every 1ms
+  const throttledDispatch = useRef(
+    throttle(
+      () => {
+        // Send all latest messages to Redux
+        const messagesToUpdate = Array.from(latestMessages.current.values());
+        if (messagesToUpdate.length > 0) {
+          dispatch(updateMIDIMessage(messagesToUpdate));
+        }
+      }, 
+      1, // 1ms interval for UI updates
+      { leading: true, trailing: true }
+    )
+  );
 
   const connectToInput = useCallback((input) => {
     try {
@@ -46,19 +62,19 @@ export const useMIDI = () => {
         }
         
         const [status, data1, data2] = message.data;
-        const timestamp = Date.now();
+        const timestamp = performance.now();
         
         const getMidiMessageType = (status) => {
           const type = status & 0xF0;
           switch (type) {
-            case 0x80: return 'noteoff';
-            case 0x90: return 'noteon';
-            case 0xA0: return 'aftertouch';
-            case 0xB0: return 'controlchange';
-            case 0xC0: return 'programchange';
-            case 0xD0: return 'channelpressure';
-            case 0xE0: return 'pitchbend';
-            default: return 'unknown';
+            case 0x80: return 'Note Off';
+            case 0x90: return 'Note On';
+            case 0xA0: return 'Aftertouch';
+            case 0xB0: return 'Control Change';
+            case 0xC0: return 'Program Change';
+            case 0xD0: return 'Channel Pressure';
+            case 0xE0: return 'Pitch Bend';
+            default: return 'Unknown';
           }
         };
         
@@ -69,7 +85,7 @@ export const useMIDI = () => {
         
         // Create standardized message object
         const messageObj = {
-          messageType: messageTypeString,
+          messageType: messageTypeString.toLowerCase().replace(' ', ''),
           channel,
           cc: data1, // CC number for CC messages, note number for note messages
           value: data2 || 0,
@@ -80,27 +96,32 @@ export const useMIDI = () => {
           raw: Array.from(message.data)
         };
 
-        // Dispatch to new throttling middleware system
-        // Middleware will handle CC/HRCC throttling, other messages pass through
+        // Dispatch to existing system for control handling
         dispatch(messageReceived(messageObj));
         
-        // Throttled monitor display for all message types
-        const now = Date.now();
-        if (now - lastMessageTime.current > MESSAGE_THROTTLE) {
-          lastMessageTime.current = now;
-          
-          const displayMessage = {
-            id: `${now}-${Math.random().toString(36).substr(2, 9)}`,
-            timestamp: new Date().toLocaleTimeString(),
-            status,
-            data1,
-            data2: data2 || 0,
-            type: messageTypeString.charAt(0).toUpperCase() + messageTypeString.slice(1),
-            raw: Array.from(message.data)
-          };
-          
-          dispatch(addMidiMessage(displayMessage));
-        }
+        // Create message for new throttled monitor system
+        const displayMessage = {
+          id: Date.now() + Math.random(),
+          timestamp,
+          status,
+          data1,
+          data2: data2 || 0,
+          type: messageTypeString,
+          channel,
+          inputId: input.id || 'unknown'
+        };
+
+        // Create unique key for this message type/channel/data1 combination
+        const messageKey = `${messageTypeString}-${channel}-${data1}`;
+        
+        // Store only the latest message for each key (ignoring excess input)
+        latestMessages.current.set(messageKey, {
+          ...displayMessage,
+          key: messageKey
+        });
+        
+        // Trigger throttled update
+        throttledDispatch.current();
       } catch (error) {
         console.error('Error processing MIDI message:', error);
       }
@@ -153,6 +174,7 @@ export const useMIDI = () => {
 
   const clearMessages = () => {
     dispatch(clearMidiMessages());
+    latestMessages.current.clear(); // Clear the local message cache too
   };
 
   const resetCalibrationHandler = (ccNumber = null) => {
