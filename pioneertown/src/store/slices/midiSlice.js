@@ -1,10 +1,10 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  // MIDI Connection
-  midiAccess: null,
-  midiInputs: [],
-  selectedInput: null,
+  // MIDI Connection (serializable data only)
+  midiAccess: { connected: false, inputCount: 0 },
+  midiInputs: [], // Array of serializable input info
+  selectedInput: null, // Serializable input info
   isConnected: false,
   
   // MIDI Messages
@@ -64,15 +64,71 @@ const midiSlice = createSlice({
   reducers: {
     // MIDI Connection Actions
     setMidiAccess: (state, action) => {
-      state.midiAccess = action.payload;
+      const access = action.payload;
+      
+      // Only store serializable data
+      if (access && typeof access === 'object') {
+        if (access.constructor && access.constructor.name === 'MIDIAccess') {
+          // Serialize MIDIAccess object
+          state.midiAccess = {
+            connected: true,
+            inputCount: access.inputs ? access.inputs.size : 0,
+            outputCount: access.outputs ? access.outputs.size : 0
+          };
+        } else {
+          // Already serialized
+          state.midiAccess = access;
+        }
+      } else {
+        state.midiAccess = { connected: false, inputCount: 0, outputCount: 0 };
+      }
     },
     
     setMidiInputs: (state, action) => {
-      state.midiInputs = action.payload;
+      // Validate that we're only storing serializable data
+      const inputs = action.payload;
+      if (Array.isArray(inputs)) {
+        const serializedInputs = inputs.map(input => {
+          // If it's already a MIDIInput object, serialize it
+          if (input && typeof input === 'object' && input.constructor && input.constructor.name === 'MIDIInput') {
+            return {
+              id: input.id,
+              manufacturer: input.manufacturer || 'Unknown',
+              name: input.name || 'Unknown Device',
+              version: input.version || '',
+              connection: input.connection,
+              state: input.state,
+              type: input.type
+            };
+          }
+          // Otherwise assume it's already serialized
+          return input;
+        });
+        state.midiInputs = serializedInputs;
+      } else {
+        state.midiInputs = [];
+      }
     },
     
     setSelectedInput: (state, action) => {
-      state.selectedInput = action.payload;
+      const input = action.payload;
+      
+      // Validate that we're only storing serializable data
+      if (input && typeof input === 'object' && input.constructor && input.constructor.name === 'MIDIInput') {
+        // Serialize MIDIInput object
+        state.selectedInput = {
+          id: input.id,
+          manufacturer: input.manufacturer || 'Unknown',
+          name: input.name || 'Unknown Device',
+          version: input.version || '',
+          connection: input.connection,
+          state: input.state,
+          type: input.type
+        };
+      } else {
+        // Already serialized or null
+        state.selectedInput = input;
+      }
     },
     
     setIsConnected: (state, action) => {
@@ -115,6 +171,16 @@ const midiSlice = createSlice({
           state.recentActivity = state.recentActivity.slice(0, 20);
         }
       });
+    },
+    
+    updateRecentActivity: (state, action) => {
+      console.log('Redux updateRecentActivity called with:', action.payload);
+      const newActivity = Array.isArray(action.payload) ? action.payload : [action.payload];
+      
+      // Replace recent activity with new data from MIDIMessageQueue
+      state.recentActivity = newActivity.slice(0, 20);
+      
+      console.log('Updated recentActivity in Redux:', state.recentActivity.length, 'messages');
     },
     clearMidiMessages: (state) => {
       state.midiMessages = [];
@@ -329,6 +395,8 @@ const midiSlice = createSlice({
     // Control Actions
     updateSliderValue: (state, action) => {
       const { id, value } = action.payload;
+      console.log('Redux updateSliderValue called:', { id, value });
+      
       if (!state.sliders[id]) {
         state.sliders[id] = { value: 0 };
       }
@@ -336,6 +404,8 @@ const midiSlice = createSlice({
       // If value is in MIDI range (0-127), convert to percentage
       const finalValue = value > 100 ? Math.round((value / 127) * 100) : value;
       state.sliders[id].value = Math.max(0, Math.min(100, finalValue));
+      
+      console.log('Slider updated in Redux:', id, finalValue);
     },
 
     updateButtonState: (state, action) => {
@@ -495,6 +565,7 @@ export const {
   setIsConnected,
   addMidiMessage,
   updateMIDIMessage,
+  updateRecentActivity,
   clearMidiMessages,
   updateSliderValue,
   toggleButton,

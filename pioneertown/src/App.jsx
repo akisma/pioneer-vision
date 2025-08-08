@@ -1,7 +1,7 @@
 import React from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store';
-import { useMIDI } from './hooks/useMIDI-simple';
+import { useMIDI } from './hooks/useMIDI';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import MIDIMonitor from './components/MIDIMonitor';
