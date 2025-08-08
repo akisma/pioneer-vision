@@ -33,7 +33,7 @@ const initialState = {
   // Legacy learning support
   isLearning: null,
   
-  // Mappings - supports CC, HRCC, and Note messages with channel support
+  // Mappings - supports CC and Note messages with channel support
   mappings: {
     slider: {
       // sliderId: { messageType: 'cc', channel: 1, ccNumber: 7 }
@@ -55,11 +55,6 @@ const initialState = {
   // Calibration data for smoothing and range mapping
   calibrationData: {
     // ccNumber: { min: 0, max: 127, smoothing: 0.8 }
-  },
-  
-  // HRCC state tracking for paired MSB/LSB messages
-  hrccState: {
-    // ccNumber: { msb: null, lsb: null }
   },
 };
 
@@ -250,73 +245,6 @@ const midiSlice = createSlice({
       }
     },
     
-    handleHRCCMessage: (state, action) => {
-      const { ccNumber, value, channel, isLSB } = action.payload;
-      
-      // HRCC uses CC pairs: MSB at ccNumber, LSB at ccNumber + 32
-      const baseCCNumber = isLSB ? ccNumber - 32 : ccNumber;
-      
-      // Initialize HRCC state if not exists
-      if (!state.hrccState[baseCCNumber]) {
-        state.hrccState[baseCCNumber] = { msb: null, lsb: null };
-      }
-      
-      // Update MSB or LSB
-      if (isLSB) {
-        state.hrccState[baseCCNumber].lsb = value;
-      } else {
-        state.hrccState[baseCCNumber].msb = value;
-      }
-      
-      // If both MSB and LSB are available, calculate 14-bit value
-      const hrccData = state.hrccState[baseCCNumber];
-      if (hrccData.msb !== null && hrccData.lsb !== null) {
-        const highResValue = (hrccData.msb << 7) | hrccData.lsb; // 14-bit value (0-16383)
-        const normalizedValue = Math.round((highResValue / 16383) * 127); // Convert to 0-127
-        
-        // Find controls mapped to this HRCC
-        Object.entries(state.ccMappings).forEach(([controlKey, mapping]) => {
-          if (mapping && mapping.type === 'hrcc' && mapping.cc === baseCCNumber && mapping.channel === channel) {
-            // Update legacy sliderValues if exists
-            if (state.sliderValues && controlKey in state.sliderValues) {
-              state.sliderValues[controlKey] = normalizedValue;
-            }
-            // Update new sliders structure
-            if (state.sliders && state.sliders[controlKey]) {
-              state.sliders[controlKey].value = Math.round((normalizedValue / 127) * 100);
-            }
-          }
-        });
-        
-        // Also check new mappings structure
-        if (state.mappings && state.mappings.slider) {
-          Object.entries(state.mappings.slider).forEach(([sliderId, mapping]) => {
-            if (mapping.messageType === 'hrcc' && 
-                mapping.ccNumber === baseCCNumber && 
-                (!mapping.channel || mapping.channel === channel)) {
-              if (!state.sliders[sliderId]) {
-                state.sliders[sliderId] = { value: 0 };
-              }
-              state.sliders[sliderId].value = Math.round((normalizedValue / 127) * 100);
-            }
-          });
-        }
-        
-        // Handle learning mode
-        if (state.isLearning) {
-          state.ccMappings[state.isLearning] = {
-            type: 'hrcc',
-            channel,
-            cc: baseCCNumber,
-          };
-          state.isLearning = null;
-        }
-        
-        // Clear HRCC state after processing
-        state.hrccState[baseCCNumber] = { msb: null, lsb: null };
-      }
-    },
-    
     handleNoteMessage: (state, action) => {
       const { noteNumber, velocity, channel, isNoteOn } = action.payload;
       
@@ -398,16 +326,6 @@ const midiSlice = createSlice({
       }
     },
     
-    // HRCC State Management
-    clearHRCCState: (state, action) => {
-      const { ccNumber } = action.payload;
-      if (ccNumber) {
-        delete state.hrccState[ccNumber];
-      } else {
-        state.hrccState = {};
-      }
-    },
-    
     // Control Actions
     updateSliderValue: (state, action) => {
       const { id, value } = action.payload;
@@ -477,8 +395,11 @@ const midiSlice = createSlice({
             return;
           }
           
-          // Update control states (sliders/buttons) for CC/HRCC messages
-          if (messageType === 'controlchange' || messageType === 'hrcc') {
+          // Update control states (sliders/buttons) for CC messages
+          if (messageType === 'controlchange') {
+            // Find mapped control for this channel+CC combination
+            const mappingKey = `ch${channel}-cc${cc}`;
+            
             // Check new mappings structure first
             if (state.mappings?.slider) {
               for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {
@@ -551,7 +472,7 @@ const midiSlice = createSlice({
       }
       
       // Add all messages to monitor (throttled messages will be added by batch update)
-      if (messageType !== 'controlchange' && messageType !== 'hrcc') {
+      if (messageType !== 'controlchange') {
         state.midiMessages.unshift({
           ...action.payload,
           id: `${action.payload.channel}-${action.payload.cc || action.payload.note}-${Date.now()}`,
@@ -582,11 +503,9 @@ export const {
   setCCMapping,
   clearCCMapping,
   handleCCMessage,
-  handleHRCCMessage,
   handleNoteMessage,
   setCalibration,
   resetCalibration,
-  clearHRCCState,
   updateButtonState,
   startLearning,
   stopLearning,
