@@ -1,20 +1,22 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  // MIDI Connection
-  midiAccess: null,
-  midiInputs: [],
-  selectedInput: null,
+  // MIDI Connection (serializable data only)
+  midiAccess: { connected: false, inputCount: 0 },
+  midiInputs: [], // Array of serializable input info
+  selectedInput: null, // Serializable input info
   isConnected: false,
   
   // MIDI Messages
   midiMessages: [],
+  latestMessages: {}, // Store latest message per channel/type/key
+  recentActivity: [], // Store recent 20 messages for display
   
   // Control State
   sliders: {
-    lVolume: { value: 64 },
-    xFader: { value: 64 },
-    rVolume: { value: 64 },
+    leftVolume: 0,
+    rightVolume: 0,
+    crossfader: 0,
   },
   
   buttons: {
@@ -31,7 +33,7 @@ const initialState = {
   // Legacy learning support
   isLearning: null,
   
-  // Mappings - supports CC, HRCC, and Note messages with channel support
+  // Mappings - supports CC and Note messages with channel support
   mappings: {
     slider: {
       // sliderId: { messageType: 'cc', channel: 1, ccNumber: 7 }
@@ -54,11 +56,6 @@ const initialState = {
   calibrationData: {
     // ccNumber: { min: 0, max: 127, smoothing: 0.8 }
   },
-  
-  // HRCC state tracking for paired MSB/LSB messages
-  hrccState: {
-    // ccNumber: { msb: null, lsb: null }
-  },
 };
 
 const midiSlice = createSlice({
@@ -67,15 +64,71 @@ const midiSlice = createSlice({
   reducers: {
     // MIDI Connection Actions
     setMidiAccess: (state, action) => {
-      state.midiAccess = action.payload;
+      const access = action.payload;
+      
+      // Only store serializable data
+      if (access && typeof access === 'object') {
+        if (access.constructor && access.constructor.name === 'MIDIAccess') {
+          // Serialize MIDIAccess object
+          state.midiAccess = {
+            connected: true,
+            inputCount: access.inputs ? access.inputs.size : 0,
+            outputCount: access.outputs ? access.outputs.size : 0
+          };
+        } else {
+          // Already serialized
+          state.midiAccess = access;
+        }
+      } else {
+        state.midiAccess = { connected: false, inputCount: 0, outputCount: 0 };
+      }
     },
     
     setMidiInputs: (state, action) => {
-      state.midiInputs = action.payload;
+      // Validate that we're only storing serializable data
+      const inputs = action.payload;
+      if (Array.isArray(inputs)) {
+        const serializedInputs = inputs.map(input => {
+          // If it's already a MIDIInput object, serialize it
+          if (input && typeof input === 'object' && input.constructor && input.constructor.name === 'MIDIInput') {
+            return {
+              id: input.id,
+              manufacturer: input.manufacturer || 'Unknown',
+              name: input.name || 'Unknown Device',
+              version: input.version || '',
+              connection: input.connection,
+              state: input.state,
+              type: input.type
+            };
+          }
+          // Otherwise assume it's already serialized
+          return input;
+        });
+        state.midiInputs = serializedInputs;
+      } else {
+        state.midiInputs = [];
+      }
     },
     
     setSelectedInput: (state, action) => {
-      state.selectedInput = action.payload;
+      const input = action.payload;
+      
+      // Validate that we're only storing serializable data
+      if (input && typeof input === 'object' && input.constructor && input.constructor.name === 'MIDIInput') {
+        // Serialize MIDIInput object
+        state.selectedInput = {
+          id: input.id,
+          manufacturer: input.manufacturer || 'Unknown',
+          name: input.name || 'Unknown Device',
+          version: input.version || '',
+          connection: input.connection,
+          state: input.state,
+          type: input.type
+        };
+      } else {
+        // Already serialized or null
+        state.selectedInput = input;
+      }
     },
     
     setIsConnected: (state, action) => {
@@ -84,28 +137,55 @@ const midiSlice = createSlice({
     
     // MIDI Message Actions
     addMidiMessage: (state, action) => {
-      try {
-        // Validate payload
-        if (!action.payload || typeof action.payload !== 'object') {
-          return;
-        }
-        
-        // Push new message
-        state.midiMessages.push(action.payload);
-        
-        // Keep only the latest 25 messages (reduced further for crash prevention)
-        if (state.midiMessages.length > 25) {
-          state.midiMessages = state.midiMessages.slice(-25);
-        }
-      } catch (error) {
-        console.error('Error adding MIDI message:', error);
-        // Reset messages array on error to prevent further crashes
-        state.midiMessages = [];
+      const message = action.payload;
+      
+      // Create unique message with timestamp if not present
+      const messageWithId = {
+        ...message,
+        id: message.id || `${Date.now()}-${Math.random()}`,
+        timestamp: message.timestamp || performance.now()
+      };
+      
+      state.midiMessages.push(messageWithId);
+      
+      // Keep only the last 50 messages to prevent memory issues
+      if (state.midiMessages.length > 50) {
+        state.midiMessages = state.midiMessages.slice(-50);
       }
     },
     
+    updateMIDIMessage: (state, action) => {
+      const messages = Array.isArray(action.payload) ? action.payload : [action.payload];
+      
+      messages.forEach(message => {
+        if (!message?.key) return;
+        
+        // Update latest message for this key
+        state.latestMessages[message.key] = message;
+        
+        // Add to recent activity (for display)
+        state.recentActivity.unshift(message);
+        
+        // Keep only last 20 for display
+        if (state.recentActivity.length > 20) {
+          state.recentActivity = state.recentActivity.slice(0, 20);
+        }
+      });
+    },
+    
+    updateRecentActivity: (state, action) => {
+      console.log('Redux updateRecentActivity called with:', action.payload);
+      const newActivity = Array.isArray(action.payload) ? action.payload : [action.payload];
+      
+      // Replace recent activity with new data from MIDIMessageQueue
+      state.recentActivity = newActivity.slice(0, 20);
+      
+      console.log('Updated recentActivity in Redux:', state.recentActivity.length, 'messages');
+    },
     clearMidiMessages: (state) => {
       state.midiMessages = [];
+      state.latestMessages = {};
+      state.recentActivity = [];
     },
     
     toggleButton: (state, action) => {
@@ -190,7 +270,8 @@ const midiSlice = createSlice({
               if (!state.sliders[sliderId]) {
                 state.sliders[sliderId] = { value: 0 };
               }
-              state.sliders[sliderId].value = Math.max(0, Math.min(100, Math.round((calibratedValue / 127) * 100)));
+              // Convert MIDI value (0-127) to percentage (0-100) with proper precision
+              state.sliders[sliderId].value = Math.round((calibratedValue / 127) * 100);
               break; // Exit after first match for performance
             }
           }
@@ -204,9 +285,9 @@ const midiSlice = createSlice({
               if (state.sliderValues && typeof state.sliderValues === 'object' && controlKey in state.sliderValues) {
                 state.sliderValues[controlKey] = calibratedValue;
               }
-              // Update new sliders structure
+              // Update new sliders structure with proper MIDI to percentage conversion
               if (state.sliders?.[controlKey]) {
-                state.sliders[controlKey].value = Math.max(0, Math.min(100, Math.round((calibratedValue / 127) * 100)));
+                state.sliders[controlKey].value = Math.round((calibratedValue / 127) * 100);
               }
               break; // Exit after first match for performance
             }
@@ -227,73 +308,6 @@ const midiSlice = createSlice({
         // Reset problematic state to prevent cascade failures
         state.learningState = { controlType: null, controlId: null };
         state.isLearning = null;
-      }
-    },
-    
-    handleHRCCMessage: (state, action) => {
-      const { ccNumber, value, channel, isLSB } = action.payload;
-      
-      // HRCC uses CC pairs: MSB at ccNumber, LSB at ccNumber + 32
-      const baseCCNumber = isLSB ? ccNumber - 32 : ccNumber;
-      
-      // Initialize HRCC state if not exists
-      if (!state.hrccState[baseCCNumber]) {
-        state.hrccState[baseCCNumber] = { msb: null, lsb: null };
-      }
-      
-      // Update MSB or LSB
-      if (isLSB) {
-        state.hrccState[baseCCNumber].lsb = value;
-      } else {
-        state.hrccState[baseCCNumber].msb = value;
-      }
-      
-      // If both MSB and LSB are available, calculate 14-bit value
-      const hrccData = state.hrccState[baseCCNumber];
-      if (hrccData.msb !== null && hrccData.lsb !== null) {
-        const highResValue = (hrccData.msb << 7) | hrccData.lsb; // 14-bit value (0-16383)
-        const normalizedValue = Math.round((highResValue / 16383) * 127); // Convert to 0-127
-        
-        // Find controls mapped to this HRCC
-        Object.entries(state.ccMappings).forEach(([controlKey, mapping]) => {
-          if (mapping && mapping.type === 'hrcc' && mapping.cc === baseCCNumber && mapping.channel === channel) {
-            // Update legacy sliderValues if exists
-            if (state.sliderValues && controlKey in state.sliderValues) {
-              state.sliderValues[controlKey] = normalizedValue;
-            }
-            // Update new sliders structure
-            if (state.sliders && state.sliders[controlKey]) {
-              state.sliders[controlKey].value = Math.round((normalizedValue / 127) * 100);
-            }
-          }
-        });
-        
-        // Also check new mappings structure
-        if (state.mappings && state.mappings.slider) {
-          Object.entries(state.mappings.slider).forEach(([sliderId, mapping]) => {
-            if (mapping.messageType === 'hrcc' && 
-                mapping.ccNumber === baseCCNumber && 
-                (!mapping.channel || mapping.channel === channel)) {
-              if (!state.sliders[sliderId]) {
-                state.sliders[sliderId] = { value: 0 };
-              }
-              state.sliders[sliderId].value = Math.round((normalizedValue / 127) * 100);
-            }
-          });
-        }
-        
-        // Handle learning mode
-        if (state.isLearning) {
-          state.ccMappings[state.isLearning] = {
-            type: 'hrcc',
-            channel,
-            cc: baseCCNumber,
-          };
-          state.isLearning = null;
-        }
-        
-        // Clear HRCC state after processing
-        state.hrccState[baseCCNumber] = { msb: null, lsb: null };
       }
     },
     
@@ -378,23 +392,20 @@ const midiSlice = createSlice({
       }
     },
     
-    // HRCC State Management
-    clearHRCCState: (state, action) => {
-      const { ccNumber } = action.payload;
-      if (ccNumber) {
-        delete state.hrccState[ccNumber];
-      } else {
-        state.hrccState = {};
-      }
-    },
-    
     // Control Actions
     updateSliderValue: (state, action) => {
       const { id, value } = action.payload;
+      console.log('Redux updateSliderValue called:', { id, value });
+      
       if (!state.sliders[id]) {
         state.sliders[id] = { value: 0 };
       }
-      state.sliders[id].value = value;
+      // If value is already in percentage (0-100), use as-is
+      // If value is in MIDI range (0-127), convert to percentage
+      const finalValue = value > 100 ? Math.round((value / 127) * 100) : value;
+      state.sliders[id].value = Math.max(0, Math.min(100, finalValue));
+      
+      console.log('Slider updated in Redux:', id, finalValue);
     },
 
     updateButtonState: (state, action) => {
@@ -434,6 +445,116 @@ const midiSlice = createSlice({
         delete state.mappings[controlType][controlId];
       }
     },
+
+    // Batched MIDI Controls Update (for throttling middleware)
+    updateMIDIControlsBatch: (state, action) => {
+      try {
+        const messages = action.payload; // Array of latest messages per channel+CC
+        
+        if (!Array.isArray(messages)) {
+          console.warn('updateMIDIControlsBatch: payload must be an array');
+          return;
+        }
+        
+        messages.forEach(message => {
+          const { channel, cc, value, messageType } = message;
+          
+          // Validate message data
+          if (!Number.isInteger(channel) || !Number.isInteger(cc) || !Number.isInteger(value)) {
+            console.warn('Invalid message data in batch:', message);
+            return;
+          }
+          
+          // Update control states (sliders/buttons) for CC messages
+          if (messageType === 'controlchange') {
+            // Find mapped control for this channel+CC combination
+            const mappingKey = `ch${channel}-cc${cc}`;
+            
+            // Check new mappings structure first
+            if (state.mappings?.slider) {
+              for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {
+                if (mapping?.messageType === messageType && 
+                    mapping?.ccNumber === cc && 
+                    (!mapping.channel || mapping.channel === channel)) {
+                  
+                  if (!state.sliders[sliderId]) {
+                    state.sliders[sliderId] = { value: 0 };
+                  }
+                  
+                  // Convert MIDI value (0-127) to percentage (0-100) with proper precision
+                  const normalizedValue = Math.round((value / 127) * 100);
+                  state.sliders[sliderId].value = normalizedValue;
+                  state.sliders[sliderId].lastUpdated = message.timestamp || Date.now();
+                  break; // Exit after first match
+                }
+              }
+            }
+            
+            // Check button mappings
+            if (state.mappings?.button) {
+              for (const [buttonId, mapping] of Object.entries(state.mappings.button)) {
+                if (mapping?.messageType === messageType && 
+                    mapping?.ccNumber === cc && 
+                    (!mapping.channel || mapping.channel === channel)) {
+                  
+                  if (!state.buttons[buttonId]) {
+                    state.buttons[buttonId] = { isPressed: false };
+                  }
+                  
+                  // Convert MIDI value to button state (>= 64 = pressed)
+                  state.buttons[buttonId].isPressed = value >= 64;
+                  state.buttons[buttonId].value = value;
+                  state.buttons[buttonId].lastUpdated = message.timestamp || Date.now();
+                  break; // Exit after first match
+                }
+              }
+            }
+            
+            // Add to monitor display (with limit)
+            state.midiMessages.unshift({
+              ...message,
+              id: `${message.channel}-${message.cc}-${message.timestamp || Date.now()}`,
+              timestamp: message.timestamp || Date.now()
+            });
+          }
+        });
+        
+        // Trim monitor messages to limit
+        if (state.midiMessages.length > 25) {
+          state.midiMessages = state.midiMessages.slice(0, 25);
+        }
+        
+      } catch (error) {
+        console.error('Error in updateMIDIControlsBatch:', error);
+        // Don't reset state on error to prevent data loss
+      }
+    },
+
+    // MIDI Message Received (for throttling middleware)
+    messageReceived: (state, action) => {
+      // This action is intercepted by middleware for CC/HRCC messages
+      // Other message types (Note On/Off) are processed here immediately
+      const { messageType } = action.payload;
+      
+      if (messageType === 'noteon' || messageType === 'noteoff') {
+        // Handle Note messages immediately (no throttling)
+        // Implementation similar to handleNoteMessage if needed
+      }
+      
+      // Add all messages to monitor (throttled messages will be added by batch update)
+      if (messageType !== 'controlchange') {
+        state.midiMessages.unshift({
+          ...action.payload,
+          id: `${action.payload.channel}-${action.payload.cc || action.payload.note}-${Date.now()}`,
+          timestamp: Date.now()
+        });
+        
+        // Trim monitor messages
+        if (state.midiMessages.length > 25) {
+          state.midiMessages = state.midiMessages.slice(0, 25);
+        }
+      }
+    },
   },
 });
 
@@ -443,6 +564,8 @@ export const {
   setSelectedInput,
   setIsConnected,
   addMidiMessage,
+  updateMIDIMessage,
+  updateRecentActivity,
   clearMidiMessages,
   updateSliderValue,
   toggleButton,
@@ -451,16 +574,16 @@ export const {
   setCCMapping,
   clearCCMapping,
   handleCCMessage,
-  handleHRCCMessage,
   handleNoteMessage,
   setCalibration,
   resetCalibration,
-  clearHRCCState,
   updateButtonState,
   startLearning,
   stopLearning,
   updateMappingValue,
   clearMapping,
+  updateMIDIControlsBatch,
+  messageReceived,
 } = midiSlice.actions;
 
 export default midiSlice.reducer;

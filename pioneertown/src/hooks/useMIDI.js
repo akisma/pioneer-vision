@@ -1,179 +1,185 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useCallback, useRef } from 'react';
 import { performanceMonitor } from '../utils/PerformanceMonitor';
+import { midiMessageQueue } from '../midi/MIDIMessageQueue';
+import { midiControlManager } from '../midi/MIDIControlManager';
 import {
   setMidiAccess,
   setMidiInputs,
   setSelectedInput,
   setIsConnected,
-  addMidiMessage,
-  clearMidiMessages,
-  updateSliderValue,
-  toggleButton,
-  setIsLearning,
-  handleCCMessage,
-  handleNoteMessage,
-  resetCalibration,
 } from '../store/slices/midiSlice';
 
 export const useMIDI = () => {
   const dispatch = useDispatch();
   const midiState = useSelector((state) => state?.midi || {});
   
-  // Throttle mechanism to prevent excessive updates
-  const lastUpdateTime = useRef({});
-  const lastMessageTime = useRef(0);
-  const messageQueue = useRef([]);
-  const processingQueue = useRef(false);
-  const THROTTLE_DELAY = 100; // Increased to 100ms (~10fps) for crash prevention
-  const MESSAGE_THROTTLE = 200; // Throttle message logging to 5fps
-  const MAX_QUEUE_SIZE = 10; // Limit queue size to prevent memory issues
+  // Store reference to actual MIDI access and current input
+  const midiAccessRef = useRef(null);
+  const currentInputRef = useRef(null);
 
-  // Batch process queued messages
-  const processMessageQueue = useCallback(() => {
-    if (processingQueue.current || messageQueue.current.length === 0) {
-      return;
-    }
+  // Connect dispatch to control manager for Redux bridge
+  useEffect(() => {
+    console.log('Setting up MIDI control manager with dispatch');
+    midiControlManager.setDispatch(dispatch);
     
-    processingQueue.current = true;
+    // Set up some basic mappings for immediate functionality
+    console.log('Setting up default control mappings');
+    midiControlManager.mapControl('leftVolume', 'slider', 'controlchange', 1, 7);
+    midiControlManager.mapControl('rightVolume', 'slider', 'controlchange', 1, 8);
+    midiControlManager.mapControl('crossfader', 'slider', 'controlchange', 1, 9);
     
-    // Process all queued messages in a single batch
-    const messagesToProcess = messageQueue.current.splice(0);
+    console.log('Available mappings after setup:', midiControlManager.getMappings());
     
-    requestIdleCallback(() => {
-      try {
-        messagesToProcess.forEach(({ messageType, channel, data1, data2 }) => {
-          if (messageType === 0xB0) {
-            // Control Change
-            const key = `cc-${data1}-${channel}`;
-            const now = Date.now();
-            if (!lastUpdateTime.current[key] || now - lastUpdateTime.current[key] > THROTTLE_DELAY) {
-              lastUpdateTime.current[key] = now;
-              dispatch(handleCCMessage({ ccNumber: data1, value: data2, channel }));
-            }
-          } else if (messageType === 0x90 || messageType === 0x80) {
-            // Note On/Off
-            const key = `note-${data1}-${channel}`;
-            const now = Date.now();
-            if (!lastUpdateTime.current[key] || now - lastUpdateTime.current[key] > THROTTLE_DELAY) {
-              lastUpdateTime.current[key] = now;
-              const isNoteOn = messageType === 0x90 && data2 > 0;
-              dispatch(handleNoteMessage({ 
-                noteNumber: data1, 
-                velocity: data2, 
-                channel, 
-                isNoteOn 
-              }));
-            }
-          }
+  }, [dispatch]);
+
+  // Subscribe to the new MIDI system and bridge to Redux
+  useEffect(() => {
+    const unsubscribeMessages = midiMessageQueue.subscribe((data) => {
+      // Bridge message queue data to Redux for UI display
+      if (data.latestMessages.length > 0) {
+        console.log('Bridging messages to Redux:', data.latestMessages.length, 'latest messages');
+        dispatch({ type: 'midi/updateMIDIMessage', payload: data.latestMessages });
+      }
+      
+      // Also bridge recent activity for the UI monitor
+      if (data.recentActivity.length > 0) {
+        console.log('Bridging recent activity to Redux:', data.recentActivity.length, 'recent messages');
+        // Convert the new format to the format expected by the UI
+        const formattedActivity = data.recentActivity.map(msg => ({
+          id: msg.id,
+          timestamp: msg.timestamp,
+          status: msg.status,
+          data1: msg.data1,
+          data2: msg.data2 || msg.value,
+          type: msg.messageType.charAt(0).toUpperCase() + msg.messageType.slice(1),
+          channel: msg.channel,
+          key: `${msg.messageType}-${msg.channel}-${msg.data1}`,
+          inputId: 'unknown'
+        }));
+        
+        dispatch({ 
+          type: 'midi/updateRecentActivity', 
+          payload: formattedActivity 
         });
-      } catch (error) {
-        console.error('Error processing MIDI message queue:', error);
-      } finally {
-        processingQueue.current = false;
-        // Schedule next batch if there are more messages
-        if (messageQueue.current.length > 0) {
-          setTimeout(processMessageQueue, 50);
-        }
       }
     });
+
+    return () => {
+      unsubscribeMessages();
+    };
   }, [dispatch]);
 
   const connectToInput = useCallback((input) => {
     try {
       // Disconnect previous input
-      if (midiState?.selectedInput) {
-        midiState.selectedInput.onmidimessage = null;
+      if (currentInputRef.current) {
+        currentInputRef.current.onmidimessage = null;
       }
 
-      dispatch(setSelectedInput(input));
+      // Store actual input reference
+      currentInputRef.current = input;
+      
+      // Store serializable version in Redux
+      const serializableInput = {
+        id: input.id,
+        manufacturer: input.manufacturer || 'Unknown',
+        name: input.name || 'Unknown Device',
+        version: input.version || '',
+        connection: input.connection,
+        state: input.state,
+        type: input.type
+      };
+      
+      dispatch(setSelectedInput(serializableInput));
       dispatch(setIsConnected(true));
     
-    input.onmidimessage = (message) => {
-      try {
-        // Record message for performance monitoring
-        performanceMonitor.recordMessage();
-        
-        // If performance is degraded, skip some messages
-        if (performanceMonitor.shouldThrottle() && Math.random() > 0.5) {
-          return; // Skip 50% of messages when throttled
-        }
-        
-        const [status, data1, data2] = message.data;
-        const timestamp = new Date().toLocaleTimeString();
-        
-        const getMidiMessageType = (status) => {
-          const type = status & 0xF0;
-          switch (type) {
-            case 0x80: return 'Note Off';
-            case 0x90: return 'Note On';
-            case 0xA0: return 'Aftertouch';
-            case 0xB0: return 'Control Change';
-            case 0xC0: return 'Program Change';
-            case 0xD0: return 'Channel Pressure';
-            case 0xE0: return 'Pitch Bend';
-            default: return 'Unknown';
-          }
-        };
-        
-        // Throttle message logging to prevent overwhelming the UI
-        const now = Date.now();
-        if (now - lastMessageTime.current > MESSAGE_THROTTLE) {
-          lastMessageTime.current = now;
+      input.onmidimessage = (message) => {
+        try {
+          performanceMonitor.recordMessage();
           
-          const newMessage = {
-            id: `${now}-${Math.random().toString(36).substr(2, 9)}`,
-            timestamp,
+          if (performanceMonitor.shouldThrottle() && Math.random() > 0.5) {
+            return;
+          }
+          
+          const [status, data1, data2] = message.data;
+          const timestamp = performance.now();
+          
+          const getMidiMessageType = (status) => {
+            const type = status & 0xF0;
+            switch (type) {
+              case 0x80: return 'noteoff';
+              case 0x90: return 'noteon';
+              case 0xA0: return 'aftertouch';
+              case 0xB0: return 'controlchange';
+              case 0xC0: return 'programchange';
+              case 0xD0: return 'channelpressure';
+              case 0xE0: return 'pitchbend';
+              default: return 'unknown';
+            }
+          };
+          
+          const messageType = getMidiMessageType(status);
+          const channel = (status & 0x0F) + 1;
+          
+          const messageObj = {
+            messageType,
+            channel,
             status,
             data1,
             data2: data2 || 0,
-            type: getMidiMessageType(status),
+            timestamp,
             raw: Array.from(message.data)
           };
+
+          midiMessageQueue.addMessage(messageObj);
           
-          dispatch(addMidiMessage(newMessage));
+        } catch (error) {
+          console.error('Error processing MIDI message:', error);
         }
-        
-        // Queue MIDI messages for batch processing
-        const messageType = status & 0xF0;
-        const channel = (status & 0x0F) + 1; // Extract channel (0-15 becomes 1-16)
-        
-        if (messageType === 0xB0 || messageType === 0x90 || messageType === 0x80) {
-          // Add to queue, but limit queue size to prevent memory issues
-          if (messageQueue.current.length < MAX_QUEUE_SIZE) {
-            messageQueue.current.push({ messageType, channel, data1, data2: data2 || 0 });
-          }
-          
-          // Start processing if not already running
-          if (!processingQueue.current) {
-            processMessageQueue();
-          }
-        }
-      } catch (error) {
-        console.error('Error processing MIDI message:', error);
-      }
-    };
+      };
     } catch (error) {
       console.error('Error connecting to MIDI input:', error);
+      dispatch(setIsConnected(false));
     }
-  }, [dispatch, midiState?.selectedInput, processMessageQueue]);
+  }, [dispatch]);
 
   const onMIDISuccess = useCallback((access) => {
-    dispatch(setMidiAccess(access));
-    const inputs = Array.from(access.inputs.values());
-    dispatch(setMidiInputs(inputs));
+    midiAccessRef.current = access;
     
-    // Auto-select first input if available
-    if (inputs.length > 0) {
-      connectToInput(inputs[0]);
+    dispatch(setMidiAccess({ connected: true, inputCount: access.inputs.size }));
+    
+    const serializableInputs = Array.from(access.inputs.values()).map(input => ({
+      id: input.id,
+      manufacturer: input.manufacturer || 'Unknown',
+      name: input.name || 'Unknown Device',
+      version: input.version || '',
+      connection: input.connection,
+      state: input.state,
+      type: input.type
+    }));
+    
+    dispatch(setMidiInputs(serializableInputs));
+    
+    if (access.inputs.size > 0) {
+      const firstInput = Array.from(access.inputs.values())[0];
+      connectToInput(firstInput);
     }
   }, [dispatch, connectToInput]);
+  
+  const connectToInputById = useCallback((inputId) => {
+    if (midiAccessRef.current) {
+      const input = midiAccessRef.current.inputs.get(inputId);
+      if (input) {
+        connectToInput(input);
+      }
+    }
+  }, [connectToInput]);
 
   const onMIDIFailure = (error) => {
     console.error('MIDI access failed:', error);
   };
 
-  // Initialize MIDI access
   useEffect(() => {
     if (navigator.requestMIDIAccess) {
       navigator.requestMIDIAccess({ sysex: false })
@@ -185,34 +191,42 @@ export const useMIDI = () => {
   }, [onMIDISuccess]);
 
   const handleSliderChange = (slider, value) => {
-    // Ensure value is a number
-    const numericValue = parseInt(value, 10);
-    dispatch(updateSliderValue({ slider, value: numericValue }));
+    console.warn('Manual slider changes should use MIDIControlManager directly');
   };
 
   const handleButtonToggle = (button) => {
-    dispatch(toggleButton({ button }));
+    console.warn('Manual button changes should use MIDIControlManager directly');
   };
 
-  const startLearning = (control) => {
-    dispatch(setIsLearning(control));
+  const startLearning = (controlType, controlId) => {
+    midiControlManager.startLearning(controlType, controlId);
+  };
+
+  const stopLearning = () => {
+    midiControlManager.stopLearning();
   };
 
   const clearMessages = () => {
-    dispatch(clearMidiMessages());
-  };
-
-  const resetCalibrationHandler = (ccNumber = null) => {
-    dispatch(resetCalibration(ccNumber));
+    midiMessageQueue.clear();
+    midiControlManager.clear();
   };
 
   return {
-    ...midiState,
+    midiAccess: midiState.midiAccess,
+    midiInputs: midiState.midiInputs,
+    selectedInput: midiState.selectedInput,
+    isConnected: midiState.isConnected,
+    
     connectToInput,
+    connectToInputById,
+    
     handleSliderChange,
     handleButtonToggle,
     startLearning,
+    stopLearning,
     clearMessages,
-    resetCalibration: resetCalibrationHandler
+    
+    messageQueue: midiMessageQueue,
+    controlManager: midiControlManager,
   };
 };
