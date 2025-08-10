@@ -22,12 +22,7 @@ export const useEscapeToCancel = () => {
     const handleKeyDown = (event) => {
       // Check if we're in learning mode and escape key was pressed
       if (event.key === 'Escape') {
-        // Use ref to get current state
-        const currentState = learningStateRef.current;
-        
-        if (currentState?.controlType && currentState?.controlId) {
-          event.preventDefault();
-          console.log('Learning mode cancelled by escape key');
+        if (learningState.controlType && learningState.controlId) {
           dispatch(stopLearning());
         }
       }
@@ -40,7 +35,7 @@ export const useEscapeToCancel = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [dispatch]); // Only depend on dispatch, which is stable
+  }, [dispatch, learningState.controlType, learningState.controlId]); // Include learningState dependencies
   
   // Return whether we're currently in learning mode
   return {

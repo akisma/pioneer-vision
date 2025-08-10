@@ -174,13 +174,10 @@ const midiSlice = createSlice({
     },
     
     updateRecentActivity: (state, action) => {
-      console.log('Redux updateRecentActivity called with:', action.payload);
       const newActivity = Array.isArray(action.payload) ? action.payload : [action.payload];
       
       // Replace recent activity with new data from MIDIMessageQueue
       state.recentActivity = newActivity.slice(0, 20);
-      
-      console.log('Updated recentActivity in Redux:', state.recentActivity.length, 'messages');
     },
     clearMidiMessages: (state) => {
       state.midiMessages = [];
@@ -395,7 +392,6 @@ const midiSlice = createSlice({
     // Control Actions
     updateSliderValue: (state, action) => {
       const { id, value } = action.payload;
-      console.log('Redux updateSliderValue called:', { id, value });
       
       if (!state.sliders[id]) {
         state.sliders[id] = { value: 0 };
@@ -404,8 +400,6 @@ const midiSlice = createSlice({
       // If value is in MIDI range (0-127), convert to percentage
       const finalValue = value > 100 ? Math.round((value / 127) * 100) : value;
       state.sliders[id].value = Math.max(0, Math.min(100, finalValue));
-      
-      console.log('Slider updated in Redux:', id, finalValue);
     },
 
     updateButtonState: (state, action) => {
@@ -467,9 +461,6 @@ const midiSlice = createSlice({
           
           // Update control states (sliders/buttons) for CC messages
           if (messageType === 'controlchange') {
-            // Find mapped control for this channel+CC combination
-            const mappingKey = `ch${channel}-cc${cc}`;
-            
             // Check new mappings structure first
             if (state.mappings?.slider) {
               for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {

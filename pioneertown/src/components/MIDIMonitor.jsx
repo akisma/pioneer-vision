@@ -7,7 +7,6 @@ const MIDIMonitor = () => {
   const dispatch = useDispatch();
   const latestMessages = useSelector(state => state.midi?.latestMessages || {});
   const recentActivity = useSelector(state => state.midi?.recentActivity || []);
-  const isConnected = useSelector(state => state.midi?.isConnected || false);
 
   const handleClearMessages = () => {
     dispatch(clearMidiMessages());
