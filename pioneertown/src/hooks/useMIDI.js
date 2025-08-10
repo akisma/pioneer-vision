@@ -8,7 +8,12 @@ import {
   setMidiInputs,
   setSelectedInput,
   setIsConnected,
+  startLearning as startLearningAction,
+  stopLearning as stopLearningAction,
 } from '../store/slices/midiSlice';
+
+// Singleton flag to prevent multiple initializations
+let isInitialized = false;
 
 export const useMIDI = () => {
   const dispatch = useDispatch();
@@ -18,34 +23,29 @@ export const useMIDI = () => {
   const midiAccessRef = useRef(null);
   const currentInputRef = useRef(null);
 
-  // Connect dispatch to control manager for Redux bridge
+  // Initialize MIDI system once
   useEffect(() => {
-    console.log('Setting up MIDI control manager with dispatch');
+    if (isInitialized) return;
+    isInitialized = true;
+    
     midiControlManager.setDispatch(dispatch);
     
-    // Set up some basic mappings for immediate functionality
-    console.log('Setting up default control mappings');
-    midiControlManager.mapControl('leftVolume', 'slider', 'controlchange', 1, 7);
-    midiControlManager.mapControl('rightVolume', 'slider', 'controlchange', 1, 8);
-    midiControlManager.mapControl('crossfader', 'slider', 'controlchange', 1, 9);
-    
-    console.log('Available mappings after setup:', midiControlManager.getMappings());
+    // Clear and set up clean mappings
+    midiControlManager.clear();
+    midiControlManager.mapControl('lVolume', 'slider', 'controlchange', 1, 1);
+    midiControlManager.mapControl('rVolume', 'slider', 'controlchange', 1, 2);
+    midiControlManager.mapControl('xFader', 'slider', 'controlchange', 1, 3);
     
   }, [dispatch]);
 
   // Subscribe to the new MIDI system and bridge to Redux
   useEffect(() => {
     const unsubscribeMessages = midiMessageQueue.subscribe((data) => {
-      // Bridge message queue data to Redux for UI display
       if (data.latestMessages.length > 0) {
-        console.log('Bridging messages to Redux:', data.latestMessages.length, 'latest messages');
         dispatch({ type: 'midi/updateMIDIMessage', payload: data.latestMessages });
       }
       
-      // Also bridge recent activity for the UI monitor
       if (data.recentActivity.length > 0) {
-        console.log('Bridging recent activity to Redux:', data.recentActivity.length, 'recent messages');
-        // Convert the new format to the format expected by the UI
         const formattedActivity = data.recentActivity.map(msg => ({
           id: msg.id,
           timestamp: msg.timestamp,
@@ -128,11 +128,15 @@ export const useMIDI = () => {
             status,
             data1,
             data2: data2 || 0,
+            value: data2 || 0,
             timestamp,
             raw: Array.from(message.data)
           };
 
           midiMessageQueue.addMessage(messageObj);
+          
+          // Also process for control learning and mapping
+          midiControlManager.processMessageForControls(messageObj);
           
         } catch (error) {
           console.error('Error processing MIDI message:', error);
@@ -186,24 +190,19 @@ export const useMIDI = () => {
         .then(onMIDISuccess)
         .catch(onMIDIFailure);
     } else {
-      console.log('Web MIDI API not supported');
+      console.warn('Web MIDI API not supported');
     }
   }, [onMIDISuccess]);
 
-  const handleSliderChange = (slider, value) => {
-    console.warn('Manual slider changes should use MIDIControlManager directly');
-  };
-
-  const handleButtonToggle = (button) => {
-    console.warn('Manual button changes should use MIDIControlManager directly');
-  };
-
   const startLearning = (controlType, controlId) => {
+    // Start learning without clearing existing mappings
     midiControlManager.startLearning(controlType, controlId);
+    dispatch(startLearningAction({ controlType, controlId }));
   };
 
   const stopLearning = () => {
     midiControlManager.stopLearning();
+    dispatch(stopLearningAction());
   };
 
   const clearMessages = () => {
@@ -219,9 +218,6 @@ export const useMIDI = () => {
     
     connectToInput,
     connectToInputById,
-    
-    handleSliderChange,
-    handleButtonToggle,
     startLearning,
     stopLearning,
     clearMessages,

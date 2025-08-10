@@ -1,121 +1,127 @@
 /**
- * MIDI Control State Manager
- * 
- * Manages the state of MIDI-controlled elements (sliders, buttons)
- * separately from message storage. Subscribes to message queue
- * and updates control states based on mappings.
+ * MIDI Control Manager - Handles learning and mapping MIDI controls
  */
-
-import { midiMessageQueue } from './MIDIMessageQueue.js';
-
 class MIDIControlManager {
   constructor() {
-    // Control states
+    this.mappings = new Map();
     this.sliders = new Map();
     this.buttons = new Map();
-    
-    // Mappings: controlId -> { messageType, channel, data1 }
-    this.mappings = new Map();
-    
-    // Learning state
     this.learningState = {
       isLearning: false,
-      controlType: null, // 'slider' | 'button'
+      controlType: null,
       controlId: null
     };
-    
-    // Subscribers for control state changes
-    this.subscribers = new Set();
-    
-    // Redux dispatch function (set by useMIDI hook)
+    this.subscribers = [];
     this.dispatch = null;
-    
-    // Subscribe to message queue
-    this.messageQueueUnsubscribe = midiMessageQueue.subscribe(
-      this.handleMessageUpdate.bind(this)
-    );
-    
-    // Performance optimization: batch updates
-    this.pendingUpdates = new Set();
     this.updateScheduled = false;
   }
-  
+
   /**
-   * Set Redux dispatch function for legacy compatibility
+   * Set Redux dispatch function for state bridging
    */
   setDispatch(dispatch) {
     this.dispatch = dispatch;
   }
-  
+
   /**
-   * Handle updates from message queue
+   * Subscribe to control manager updates
    */
-  handleMessageUpdate({ latestMessages }) {
-    latestMessages.forEach(message => {
-      this.processMessageForControls(message);
+  subscribe(callback) {
+    this.subscribers.push(callback);
+    return () => {
+      const index = this.subscribers.indexOf(callback);
+      if (index > -1) {
+        this.subscribers.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Notify all subscribers of state changes
+   */
+  notifySubscribers() {
+    const state = {
+      mappings: Object.fromEntries(this.mappings),
+      sliders: Object.fromEntries(this.sliders),
+      buttons: Object.fromEntries(this.buttons),
+      learningState: { ...this.learningState }
+    };
+
+    this.subscribers.forEach(callback => {
+      try {
+        callback(state);
+      } catch (error) {
+        console.error('Error in subscriber:', error);
+      }
     });
   }
-  
+
   /**
    * Process a message for mapped controls
    */
   processMessageForControls(message) {
-    const { messageType, channel, data1, value } = message;
-    
-    console.log('Processing message for controls:', { messageType, channel, data1, value });
+    const { messageType, channel, data1 } = message;
     
     // Handle learning mode first
     if (this.learningState.isLearning) {
-      this.completeLearning(messageType, channel, data1);
+      
+      // Check if this CC is already mapped to prevent conflicts
+      const existingMapping = Array.from(this.mappings.entries()).find(([, mapping]) => 
+        mapping.messageType === messageType && 
+        mapping.channel === channel && 
+        mapping.data1 === data1
+      );
+      
+      if (existingMapping) {
+        const [existingControlId] = existingMapping;
+        
+        // Remove the existing mapping to prevent conflicts
+        this.mappings.delete(existingControlId);
+      }
+      
+      const { controlType, controlId } = this.learningState;
+      
+      this.completeControlLearning(controlType, controlId, messageType, channel, data1);
       return;
     }
     
     // Check all mappings for matches
-    let foundMapping = false;
     for (const [controlId, mapping] of this.mappings.entries()) {
       if (this.isMessageForControl(message, mapping)) {
-        console.log('Found mapping for control:', controlId, mapping);
         this.updateControlFromMessage(controlId, mapping.controlType, message);
-        foundMapping = true;
       }
     }
-    
-    if (!foundMapping) {
-      console.log('No mapping found for message:', { messageType, channel, data1 });
-      console.log('Available mappings:', Array.from(this.mappings.entries()));
-    }
   }
-  
+
   /**
-   * Check if message matches control mapping
+   * Check if a message matches a control mapping
    */
   isMessageForControl(message, mapping) {
-    return (
-      mapping.messageType === message.messageType &&
-      mapping.channel === message.channel &&
-      mapping.data1 === message.data1
-    );
+    return message.messageType === mapping.messageType &&
+           message.channel === mapping.channel &&
+           message.data1 === mapping.data1;
   }
-  
+
   /**
-   * Update control state from message
+   * Update control from MIDI message
    */
   updateControlFromMessage(controlId, controlType, message) {
-    if (controlType === 'slider') {
-      this.updateSlider(controlId, message.value);
-    } else if (controlType === 'button') {
-      this.updateButton(controlId, message);
+    switch (controlType) {
+      case 'slider':
+        this.updateSlider(controlId, message.value || message.data2);
+        break;
+      case 'button':
+        this.updateButton(controlId, message.value > 0);
+        break;
     }
   }
-  
+
   /**
    * Update slider value
    */
   updateSlider(sliderId, midiValue) {
     // Convert MIDI value (0-127) to percentage (0-100)
     const percentage = Math.round((midiValue / 127) * 100);
-    
-    console.log('Updating slider:', sliderId, 'MIDI value:', midiValue, 'Percentage:', percentage);
     
     const currentSlider = this.sliders.get(sliderId);
     const newValue = {
@@ -130,7 +136,6 @@ class MIDIControlManager {
       
       // Also dispatch to Redux for legacy UI components
       if (this.dispatch) {
-        console.log('Dispatching Redux action for slider:', sliderId, percentage);
         this.dispatch({
           type: 'midi/updateSliderValue',
           payload: { id: sliderId, value: percentage }
@@ -142,26 +147,14 @@ class MIDIControlManager {
       this.scheduleUpdate();
     }
   }
-  
+
   /**
    * Update button state
    */
-  updateButton(buttonId, message) {
-    const { messageType, value } = message;
-    
-    let isPressed = false;
-    
-    if (messageType === 'noteon') {
-      isPressed = value > 0;
-    } else if (messageType === 'controlchange') {
-      // CC messages: >= 64 = pressed
-      isPressed = value >= 64;
-    }
-    
+  updateButton(buttonId, isPressed) {
     const currentButton = this.buttons.get(buttonId);
     const newState = {
       isPressed,
-      value: value,
       lastUpdated: Date.now()
     };
     
@@ -180,38 +173,22 @@ class MIDIControlManager {
       this.scheduleUpdate();
     }
   }
-  
+
   /**
-   * Map a control to a MIDI message
+   * Schedule an update notification
    */
-  mapControl(controlId, controlType, messageType, channel, data1) {
-    this.mappings.set(controlId, {
-      controlType,
-      messageType,
-      channel,
-      data1
-    });
-    
-    // Initialize control state if it doesn't exist
-    if (controlType === 'slider' && !this.sliders.has(controlId)) {
-      this.sliders.set(controlId, { value: 0, midiValue: 0, lastUpdated: Date.now() });
-    } else if (controlType === 'button' && !this.buttons.has(controlId)) {
-      this.buttons.set(controlId, { isPressed: false, value: 0, lastUpdated: Date.now() });
+  scheduleUpdate() {
+    if (!this.updateScheduled) {
+      this.updateScheduled = true;
+      setTimeout(() => {
+        this.notifySubscribers();
+        this.updateScheduled = false;
+      }, 16); // ~60fps
     }
-    
-    this.scheduleUpdate();
   }
-  
+
   /**
-   * Remove control mapping
-   */
-  unmapControl(controlId) {
-    this.mappings.delete(controlId);
-    this.scheduleUpdate();
-  }
-  
-  /**
-   * Start learning mode
+   * Start learning mode for a control
    */
   startLearning(controlType, controlId) {
     this.learningState = {
@@ -219,8 +196,10 @@ class MIDIControlManager {
       controlType,
       controlId
     };
+    
+    this.scheduleUpdate();
   }
-  
+
   /**
    * Stop learning mode
    */
@@ -230,126 +209,80 @@ class MIDIControlManager {
       controlType: null,
       controlId: null
     };
-  }
-  
-  /**
-   * Complete learning process
-   */
-  completeLearning(messageType, channel, data1) {
-    const { controlType, controlId } = this.learningState;
     
-    if (controlType && controlId) {
-      this.mapControl(controlId, controlType, messageType, channel, data1);
+    // Also dispatch to Redux to sync UI state
+    if (this.dispatch) {
+      // Import the action creator if available, otherwise use raw action
+      try {
+        // We'll use the raw action for now since we don't want to create circular imports
+        this.dispatch({
+          type: 'midi/stopLearning'
+        });
+      } catch (error) {
+        console.warn('Could not dispatch stopLearning action:', error);
+      }
     }
     
+    this.scheduleUpdate();
+  }
+
+  /**
+   * Complete learning for a control
+   */
+  completeControlLearning(controlType, controlId, messageType, channel, data1) {
+    // Create the mapping
+    this.mapControl(controlId, controlType, messageType, channel, data1);
+    
+    // Stop learning mode
     this.stopLearning();
   }
-  
+
+  /**
+   * Map a control to a MIDI message
+   */
+  mapControl(controlId, controlType, messageType, channel, data1) {
+    const mapping = {
+      controlType,
+      messageType,
+      channel,
+      data1
+    };
+    
+    this.mappings.set(controlId, mapping);
+    this.scheduleUpdate();
+  }
+
+  /**
+   * Get all current mappings
+   */
+  getMappings() {
+    return Object.fromEntries(this.mappings);
+  }
+
   /**
    * Get all slider states
    */
   getSliders() {
     return Object.fromEntries(this.sliders);
   }
-  
+
   /**
    * Get all button states
    */
   getButtons() {
     return Object.fromEntries(this.buttons);
   }
-  
+
   /**
-   * Get specific slider value
-   */
-  getSlider(sliderId) {
-    return this.sliders.get(sliderId) || { value: 0, midiValue: 0, lastUpdated: 0 };
-  }
-  
-  /**
-   * Get specific button state
-   */
-  getButton(buttonId) {
-    return this.buttons.get(buttonId) || { isPressed: false, value: 0, lastUpdated: 0 };
-  }
-  
-  /**
-   * Get all mappings
-   */
-  getMappings() {
-    return Object.fromEntries(this.mappings);
-  }
-  
-  /**
-   * Subscribe to control state updates
-   */
-  subscribe(callback) {
-    this.subscribers.add(callback);
-    
-    // Return unsubscribe function
-    return () => {
-      this.subscribers.delete(callback);
-    };
-  }
-  
-  /**
-   * Schedule batched update notification
-   */
-  scheduleUpdate() {
-    if (!this.updateScheduled) {
-      this.updateScheduled = true;
-      
-      requestAnimationFrame(() => {
-        this.notifySubscribers();
-        this.updateScheduled = false;
-      });
-    }
-  }
-  
-  /**
-   * Notify subscribers of state changes
-   */
-  notifySubscribers() {
-    const state = {
-      sliders: this.getSliders(),
-      buttons: this.getButtons(),
-      mappings: this.getMappings(),
-      learningState: { ...this.learningState }
-    };
-    
-    this.subscribers.forEach(callback => {
-      try {
-        callback(state);
-      } catch (error) {
-        console.error('Error in MIDI control subscriber:', error);
-      }
-    });
-  }
-  
-  /**
-   * Clear all control states
+   * Clear all mappings and states
    */
   clear() {
+    this.mappings.clear();
     this.sliders.clear();
     this.buttons.clear();
-    this.mappings.clear();
-    this.stopLearning();
     this.scheduleUpdate();
-  }
-  
-  /**
-   * Cleanup
-   */
-  destroy() {
-    if (this.messageQueueUnsubscribe) {
-      this.messageQueueUnsubscribe();
-    }
-    this.subscribers.clear();
   }
 }
 
-// Global singleton instance
+// Create and export singleton instance
 export const midiControlManager = new MIDIControlManager();
-
-// Export the class for testing
-export { MIDIControlManager };

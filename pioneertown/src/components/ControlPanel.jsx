@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { updateSliderValue, updateButtonState, startLearning, updateMappingValue } from '../store/slices/midiSlice';
+import { updateSliderValue, updateButtonState, updateMappingValue } from '../store/slices/midiSlice';
+import { useMIDI } from '../hooks/useMIDI';
 import { useEscapeToCancel } from '../hooks/useEscapeToCancel';
 import VerticalSlider from './VerticalSlider';
 import HorizontalSlider from './HorizontalSlider';
@@ -8,6 +9,9 @@ import FXButton from './FXButton';
 
 const ControlPanel = () => {
   const dispatch = useDispatch();
+  
+  // Use the clean useMIDI hook for learning functionality
+  const { startLearning } = useMIDI();
   
   // Initialize escape key cancellation
   useEscapeToCancel();
@@ -34,7 +38,7 @@ const ControlPanel = () => {
   };
   
   const handleStartLearning = (controlType, controlId) => {
-    dispatch(startLearning({ controlType, controlId }));
+    startLearning(controlType, controlId);
   };
   
   const handleMappingChange = (controlType, controlId, messageType, channel, ccNumber) => {

@@ -45,8 +45,6 @@ class MIDIMessageQueue {
     // Create standardized message object
     const standardizedMessage = this.standardizeMessage(message, timestamp);
     
-    console.log('MIDI message received:', standardizedMessage);
-    
     // Generate unique key for this control
     const controlKey = this.generateControlKey(standardizedMessage);
     
@@ -54,7 +52,6 @@ class MIDIMessageQueue {
     const existing = this.latestMessages.get(controlKey);
     if (existing && existing.value === standardizedMessage.value) {
       this.stats.duplicatesFiltered++;
-      console.log('Duplicate message filtered:', controlKey, standardizedMessage.value);
       return; // Skip duplicate values
     }
     
