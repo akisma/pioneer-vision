@@ -1,6 +1,6 @@
-# 🎛️ PioneerTown - MIDI-based Status Monitoring for Pioneer DJM-series Controllers
+# 🎛️ PioneerTown - MIDI Controller Interface
 
-A modern, web-based MIDI aggregation dashboard built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI observation with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
+A modern, web-based MIDI controller interface built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI control with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
 
 ![MIDI Controller Interface](https://img.shields.io/badge/MIDI-Controller-orange) ![React](https://img.shields.io/badge/React-19.1.0-blue) ![Redux](https://img.shields.io/badge/Redux-Toolkit-purple) ![Vite](https://img.shields.io/badge/Vite-7.0.2-green)
 
@@ -15,12 +15,20 @@ A modern, web-based MIDI aggregation dashboard built with React, Redux, and the 
 
 ### 📊 **MIDI Monitor**
 - **Real-time Message Display**: Live MIDI message logging with timestamps
-- **Message Types**: Support for CC, HRCC, Note On/Off, Pitch Bend, and more
+- **Message Types**: Support for CC, Note On/Off, Pitch Bend, and more
+- **Performance Optimized**: Limited display (20 messages) for smooth operation
+- **Auto-scroll**: Automatic scrolling to latest messages
+
+### 🛡️ **Crash Prevention**
+- **Performance Monitoring**: Real-time FPS and message rate tracking
+- **Adaptive Throttling**: Automatic performance adjustment under load
+- **Error Boundaries**: Graceful error recovery with state reset
+- **Memory Management**: Efficient message queuing and cleanup
 
 ### 🎨 **Modern UI**
 - **Responsive Design**: Clean, modern interface built with Tailwind CSS
 - **Real-time Updates**: Instant visual feedback for all controls
-- **Dark Theme**: Professional dark interface with orange accents, ideal for live situations
+- **Dark Theme**: Professional dark interface with orange accents
 - **Touch Friendly**: Optimized for both mouse and touch interactions
 
 ## 🚀 Quick Start
@@ -57,6 +65,28 @@ npm run build
 npm run preview
 ```
 
+### 🐳 Docker Deployment
+
+PioneerTown includes comprehensive Docker support for production deployment:
+
+```bash
+# Build and run with cache busting
+./build.sh --cache-bust
+
+# Run the container
+docker run -d -p 8080:8080 --name pioneertown-app pioneertown:latest
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+**Build Options:**
+- `./build.sh --cache-bust`: Fast iterative builds with selective cache invalidation
+- `./build.sh --no-cache`: Complete rebuild for configuration changes
+- `./build.sh --clean`: Clean build environment and rebuild
+
+See [DOCKER.md](DOCKER.md) for detailed Docker setup and deployment guide.
+
 ## 🎛️ Using the Interface
 
 ### 1. **MIDI Device Connection**
@@ -74,7 +104,7 @@ npm run preview
 ### 3. **Manual Mapping**
 - Use the mapping controls to manually assign CC numbers
 - Set specific MIDI channels for each control
-- Choose between CC, HRCC, and Note message types
+- Choose between CC and Note message types
 
 ### 4. **Monitoring MIDI**
 - View real-time MIDI messages in the monitor panel
@@ -90,6 +120,7 @@ npm run preview
 - **Build Tool**: Vite 7.0.2
 - **MIDI**: Web MIDI API with custom hooks
 - **Icons**: Lucide React
+- **Deployment**: Docker with multi-stage builds and Nginx
 
 ### **Key Components**
 
@@ -179,12 +210,13 @@ const DISPLAY_LIMIT = 20;        // Max displayed messages
 
 ### **Supported Message Types**
 - **Control Change (CC)**: Standard 7-bit controllers
-- **High Resolution CC (HRCC)**: 14-bit controllers using MSB/LSB pairs
 - **Note On/Off**: For button and trigger controls
 - **Program Change**: Program selection
 - **Pitch Bend**: Pitch wheel controls
 - **Channel Pressure**: Aftertouch
 - **Poly Aftertouch**: Per-note aftertouch
+
+> **Note**: High Resolution CC (HRCC) support has been removed in v0.2.0 to simplify the interface and improve performance. Standard 7-bit CC messages provide sufficient resolution for most MIDI controllers.
 
 ### **MIDI Channels**
 - Full 16-channel support (channels 1-16)
@@ -199,14 +231,23 @@ npm run lint
 
 # Build test
 npm run build
+
+# Test Docker build
+./build.sh --cache-bust
 ```
 
 ### **Manual Testing**
-1. Start the development server
+1. Start the development server (`npm run dev`) or Docker container
 2. Connect a MIDI controller
 3. Test all controls with MIDI learning
 4. Verify real-time response and monitoring
 5. Test performance with rapid controller movement
+
+### **Docker Testing**
+1. Build the Docker image: `./build.sh --cache-bust`
+2. Run the container: `docker run -d -p 8080:8080 --name pioneertown-test pioneertown:latest`
+3. Access the app at `http://localhost:8080`
+4. Test all functionality in the containerized environment
 
 ## 🤝 Contributing
 
@@ -222,6 +263,8 @@ npm run build
 - Test performance with high-frequency MIDI data
 - Update documentation for new features
 - Ensure mobile/touch compatibility
+- Test Docker builds with cache busting for deployment changes
+- Use `./build.sh --cache-bust` for iterative Docker development
 
 ## 📄 License
 
@@ -234,6 +277,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Tailwind CSS** for rapid UI development
 - **Vite** for fast development and building
 - **Lucide React** for beautiful icons
+- **Docker** for containerized deployment and development consistency
 
 ## 📞 Support
 
