@@ -1,6 +1,6 @@
 # 🎛️ PioneerTown - MIDI-based Status Monitoring for Pioneer DJM-series Controllers
 
-A modern, web-based MIDI aggregation dashboard built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI observation with a responsive, crash-resistant architecture optimized for high-frequency MIDI data, including HRCC.
+A modern, web-based MIDI aggregation dashboard built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI observation with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
 
 ![MIDI Controller Interface](https://img.shields.io/badge/MIDI-Controller-orange) ![React](https://img.shields.io/badge/React-19.1.0-blue) ![Redux](https://img.shields.io/badge/Redux-Toolkit-purple) ![Vite](https://img.shields.io/badge/Vite-7.0.2-green)
 
