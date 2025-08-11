@@ -1,6 +1,6 @@
-# 🎛️ PioneerTown - MIDI Controller Interface
+# 🎛️ PioneerTown - MIDI Monitor for DJM series Pioneer mixers
 
-A modern, web-based MIDI controller interface built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI control with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
+A modern, web-based MIDI controller interface built with React, Redux, and the Web MIDI API. PioneerTown provides real-time MIDI monitoring with a responsive, crash-resistant architecture optimized for high-frequency MIDI data.
 
 ![MIDI Controller Interface](https://img.shields.io/badge/MIDI-Controller-orange) ![React](https://img.shields.io/badge/React-19.1.0-blue) ![Redux](https://img.shields.io/badge/Redux-Toolkit-purple) ![Vite](https://img.shields.io/badge/Vite-7.0.2-green)
 
