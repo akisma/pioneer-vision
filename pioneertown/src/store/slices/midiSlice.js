@@ -459,8 +459,8 @@ const midiSlice = createSlice({
             return;
           }
           
-          // Update control states (sliders/buttons) for CC messages
-          if (messageType === 'controlchange') {
+          // Update control states (sliders/buttons) for CC/HRCC messages
+          if (messageType === 'controlchange' || messageType === 'hrcc') {
             // Check new mappings structure first
             if (state.mappings?.slider) {
               for (const [sliderId, mapping] of Object.entries(state.mappings.slider)) {
@@ -527,13 +527,12 @@ const midiSlice = createSlice({
       // Other message types (Note On/Off) are processed here immediately
       const { messageType } = action.payload;
       
+      // Only handle note messages here - CC messages are handled by throttling system
       if (messageType === 'noteon' || messageType === 'noteoff') {
         // Handle Note messages immediately (no throttling)
         // Implementation similar to handleNoteMessage if needed
-      }
-      
-      // Add all messages to monitor (throttled messages will be added by batch update)
-      if (messageType !== 'controlchange') {
+        
+        // Add to monitor display (but not duplicated)
         state.midiMessages.unshift({
           ...action.payload,
           id: `${action.payload.channel}-${action.payload.cc || action.payload.note}-${Date.now()}`,
@@ -545,6 +544,7 @@ const midiSlice = createSlice({
           state.midiMessages = state.midiMessages.slice(0, 25);
         }
       }
+      // CC/HRCC messages are handled by updateMIDIControlsBatch, not here
     },
   },
 });

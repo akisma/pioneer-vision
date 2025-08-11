@@ -1,109 +1,122 @@
 import React from 'react';
-import { Activity } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { clearMidiMessages } from '../store/slices/midiSlice';
 
 const MIDIMonitor = () => {
   const dispatch = useDispatch();
-  const latestMessages = useSelector(state => state.midi?.latestMessages || {});
-  const recentActivity = useSelector(state => state.midi?.recentActivity || []);
+  
+  // Get MIDI state from Redux - use recentActivity for messages
+  const { 
+    recentActivity, 
+    latestMessages, 
+    isConnected,
+    midiInputs,
+    selectedInput
+  } = useSelector((state) => state.midi);
 
-  const handleClearMessages = () => {
+  // Use recentActivity for recent activity display
+  const displayMessages = recentActivity || [];
+  
+  // Get current control states for display
+  const currentStates = latestMessages || {};
+
+  const clearMessages = () => {
     dispatch(clearMidiMessages());
   };
 
   const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    const seconds = Math.floor(timestamp / 1000) % 60;
-    const minutes = Math.floor(timestamp / 60000) % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    if (!timestamp) return 'No timestamp';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString() + '.' + String(date.getMilliseconds()).padStart(3, '0');
   };
 
-  // Convert latest messages to array for display
-  const latestMessagesArray = Object.values(latestMessages);
+  const formatMessageType = (type) => {
+    if (!type) return 'Unknown';
+    return type.replace(/([A-Z])/g, ' $1').trim();
+  };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div className="bg-gray-800 border-b border-gray-700 p-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-orange-400 flex items-center">
-            <Activity className="mr-2" size={20} />
-            MIDI Monitor
-          </h2>
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-400">
-              {latestMessagesArray.length} active controls, {recentActivity.length} recent
-            </div>
-            <button 
-              onClick={handleClearMessages}
-              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-            >
-              Clear
-            </button>
-          </div>
+    <div className="flex-1 bg-gray-800 p-4 overflow-hidden">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">MIDI Monitor</h2>
+        <div className="flex items-center gap-4">
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+            isConnected 
+              ? 'bg-green-900 text-green-300 border border-green-600' 
+              : 'bg-red-900 text-red-300 border border-red-600'
+          }`}>
+            {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          </span>
+          <button 
+            onClick={clearMessages} 
+            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+          >
+            Clear Messages
+          </button>
         </div>
       </div>
-      
-      <div className="flex-1 overflow-y-auto bg-gray-900 min-h-0">
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full overflow-hidden">
         {/* Current Control States */}
-        <div className="p-4 border-b border-gray-700">
-          <h3 className="text-orange-400 font-medium mb-3">Current Control States</h3>
-          {latestMessagesArray.length === 0 ? (
-            <div className="text-center text-gray-500 py-4">
-              <p>No active controls</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {latestMessagesArray.map((message) => (
-                <div key={message.key} className="bg-blue-900/30 border border-blue-700/50 rounded p-3 text-sm">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-blue-300 font-medium">{message.type}</span>
-                    <span className="text-xs text-gray-400">Ch{message.channel}</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className="text-blue-400 font-bold">
-                      {message.type === 'Control Change' ? `CC${message.data1}` : 
-                       message.type === 'Note On' || message.type === 'Note Off' ? `Note${message.data1}` :
-                       `${message.data1}`}
-                    </span>
-                    <span className="text-green-400 font-bold text-lg">{message.data2}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {formatTimestamp(message.timestamp)}
+        <div className="bg-gray-900 rounded-lg p-4 overflow-hidden">
+          <h3 className="text-lg font-semibold mb-3 text-orange-400">Current Control States</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {Object.keys(currentStates).length === 0 ? (
+              <div className="text-gray-400 text-center py-4">No control states available</div>
+            ) : (
+              Object.entries(currentStates).map(([key, message]) => (
+                <div key={key} className="bg-gray-800 p-3 rounded border border-gray-700">
+                  <div className="text-sm font-medium text-orange-300">{key}</div>
+                  <div className="text-xs text-gray-300 mt-1">
+                    Ch:{message.channel} | CC:{message.data1} | Val:{message.data2}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="p-4">
-          <h3 className="text-orange-400 font-medium mb-3">Recent Activity</h3>
-          {recentActivity.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              <Activity size={48} className="mx-auto mb-4 opacity-50" />
-              <p>No MIDI messages received</p>
-              <p className="text-sm">Connect a MIDI device and start playing</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {recentActivity.slice(0, 20).map((message, index) => (
-                <div key={`${message.id}-${index}`} className="bg-gray-800/50 rounded px-3 py-2 text-sm flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-500 w-12">
+        {/* Recent Message Activity */}
+        <div className="bg-gray-900 rounded-lg p-4 overflow-hidden">
+          <h3 className="text-lg font-semibold mb-3 text-orange-400">
+            Recent Message Activity ({displayMessages.length})
+          </h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {displayMessages.length === 0 ? (
+              <div className="text-gray-400 text-center py-4">
+                <div>No MIDI messages received</div>
+                <div className="text-xs mt-2 space-y-1">
+                  <div>Connected: {isConnected ? 'Yes' : 'No'}</div>
+                  <div>Available Inputs: {midiInputs?.length || 0}</div>
+                  <div>Selected: {selectedInput?.name || 'None'}</div>
+                  <div>Messages Array Length: {displayMessages?.length || 0}</div>
+                </div>
+              </div>
+            ) : (
+              displayMessages.map((message, index) => (
+                <div key={message.id || index} className="bg-gray-800 p-3 rounded border border-gray-700">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-xs text-gray-400">
                       {formatTimestamp(message.timestamp)}
-                    </span>
-                    <span className="text-gray-300">{message.type}</span>
-                    <span className="text-blue-400">Ch{message.channel}</span>
+                    </div>
+                    <div className="text-xs text-blue-400 font-medium">
+                      {formatMessageType(message.type)}
+                    </div>
                   </div>
-                  <div className="text-gray-400 font-mono text-xs">
-                    {(message.status || 0).toString(16).toUpperCase()} {message.data1 || 0} {message.data2 || 0}
+                  <div className="text-sm text-gray-300">
+                    Ch: {message.channel} | 
+                    {message.type && message.type.toLowerCase().includes('note') ? 
+                      ` Note: ${message.data1} | Vel: ${message.data2}` : 
+                      ` CC: ${message.data1} | Val: ${message.data2}`
+                    }
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Raw: [{message.status}, {message.data1}, {message.data2}]
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

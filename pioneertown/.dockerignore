@@ -1,0 +1,86 @@
+# Docker ignore file for pioneertown
+# Ignore node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore build output
+dist/
+build/
+
+# Ignore development files
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Security: Ignore sensitive files
+.npmrc
+.yarnrc
+.ssh/
+id_rsa*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private/
+
+# Ignore version control
+.git/
+.gitignore
+.github/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore test coverage
+coverage/
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore temporary files
+tmp/
+temp/
+
+# Ignore documentation (optional - remove if you want docs in container)
+*.md
+docs/
+
+# Ignore development config files
+.eslintrc*
+.prettierrc*
+# Keep essential build config files: postcss.config.js, tailwind.config.js, vite.config.js
+# Only ignore non-essential config files
+jest.config.js
+babel.config.js
+webpack.config.js
+rollup.config.js
+
+# Ignore test files (optional - remove if you want to run tests in container)
+**/*.test.js
+**/*.test.jsx
+**/*.test.ts
+**/*.test.tsx
+__tests__/
+src/setupTests.js
+
+# Security: Ignore backup and temporary files that might contain sensitive data
+*~
+*.bak
+*.tmp
+*.swp
+.backup/
